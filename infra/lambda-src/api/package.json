@@ -1,0 +1,11 @@
+{
+  "name": "myaxis-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "MyAxis API Lambda package",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "*",
+    "@aws-sdk/lib-dynamodb": "*"
+  }
+}

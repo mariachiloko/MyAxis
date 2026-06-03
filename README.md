@@ -36,6 +36,7 @@ Open the static site with a local web server, then edit `config.example.js` and 
 - `app.js`, `index.html`, and `styles.css` are the public dashboard shell
 - `infra/` contains the AWS/Terraform scaffold for the serverless deployment path
 - `scripts/build.sh` creates a simple static build output in `dist/`
+- `scripts/package-api.sh` installs the Lambda dependencies before a Terraform apply
 - `.github/workflows/` contains CI and deployment workflows
 
 ## Customization
@@ -70,3 +71,12 @@ The current version is focused on a clean, modular dashboard shell with local-fi
   - `SITE_BUCKET`
   - `CLOUDFRONT_DISTRIBUTION_ID`
 - Terraform outputs the bucket name, CloudFront domain, API endpoint, Cognito IDs, and deploy role ARN
+- Run `./scripts/package-api.sh` before `terraform apply` so the Lambda zip includes its Node dependencies
+
+## Backend API
+
+- `GET /health` for a public health check
+- `GET /v1/me` for the signed-in user plus stored workspace state
+- `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/settings`
+- `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/calendar-connection`
+- The API expects a Cognito JWT on authenticated routes
