@@ -19,6 +19,7 @@ const STORAGE_KEYS = {
   calendarCache: "workspace-dashboard:calendar-cache",
   hiddenCalendarEvents: "workspace-dashboard:hidden-calendar-events",
   calendarTodos: "workspace-dashboard:calendar-todos",
+  motivationQuoteCache: "workspace-dashboard:motivation-quote-cache",
   backendApiBaseUrl: "workspace-dashboard:backend-api-base-url",
   backendApiToken: "workspace-dashboard:backend-api-token",
   cognitoSettings: "workspace-dashboard:cognito-settings",
@@ -698,6 +699,12 @@ async function refreshMotivationQuote(workspace) {
   const requestId = appState.motivationQuoteRequestId + 1;
   appState.motivationQuoteRequestId = requestId;
   const normalizedWorkspace = normalizeWorkspace(workspace);
+  const cachedQuote = getStoredMotivationQuote(normalizedWorkspace.id);
+  if (cachedQuote && cachedQuote.dateKey === formatDateKey(new Date())) {
+    appState.motivationQuote = cachedQuote.quote;
+    renderMotivation();
+    return;
+  }
   const nextQuote = await resolveAIText({
     mode: "motivation",
     workspace: normalizedWorkspace
@@ -707,6 +714,7 @@ async function refreshMotivationQuote(workspace) {
   }
 
   appState.motivationQuote = nextQuote;
+  saveMotivationQuoteCache(normalizedWorkspace.id, nextQuote);
   renderMotivation();
 }
 
@@ -813,6 +821,24 @@ function extractAIText(payload, mode) {
 function generateLocalMotivationQuote(workspace) {
   const index = Math.floor(Math.random() * MOTIVATION_QUOTES.length);
   return MOTIVATION_QUOTES[index] || "Keep the next step small and visible.";
+}
+
+function getMotivationQuoteStorageKey(workspaceId) {
+  return `${STORAGE_KEYS.motivationQuoteCache}:${workspaceId}`;
+}
+
+function getStoredMotivationQuote(workspaceId) {
+  return readStoredJson(getMotivationQuoteStorageKey(workspaceId), null);
+}
+
+function saveMotivationQuoteCache(workspaceId, quote) {
+  localStorage.setItem(
+    getMotivationQuoteStorageKey(workspaceId),
+    JSON.stringify({
+      dateKey: formatDateKey(new Date()),
+      quote: String(quote || "").trim()
+    })
+  );
 }
 
 function generateLocalAssistantReply(workspace, prompt) {

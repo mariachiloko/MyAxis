@@ -12,6 +12,7 @@ Save workspace data to the backend so it follows the user across browsers and de
 - Home calendar cache
 - Hidden calendar items
 - Capture notes and assistant history
+- Motivation quotes stay cached locally for the day so the AI is not called over and over
 
 ## When it runs
 

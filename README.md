@@ -52,6 +52,7 @@ Open the static site with a local web server, then edit `config.example.js` and 
 - Local UI overrides are stored in browser storage, not GitHub
 - Kanban columns are meant to read like `To-do`, `In progress`, and `Done`
 - If you set `aiEndpoint`, the dashboard will POST workspace context to that endpoint and use the returned `quote` field for motivation text or `text`/`message` for assistant replies when available
+- Motivation quotes are cached per day in the browser so the AI does not get called on every app open
 - If you set `apiBaseUrl`, the dashboard can sync workspace settings and Home calendar connections to the AWS backend
 - If you set the Cognito fields, the dashboard can sign in against your AWS user pool and use that session for backend requests
 - Home calendar sync settings live locally and are not part of the public repo

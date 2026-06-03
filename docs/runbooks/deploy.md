@@ -43,6 +43,7 @@ You can deploy when these are true:
 - Cognito for login
 - DynamoDB for user and workspace data
 - Lambda and API Gateway for backend requests
+- Bedrock for AI replies and motivation quotes if you want the AWS-native AI path
 
 ## What to check after deploy
 
@@ -51,6 +52,7 @@ You can deploy when these are true:
 - The dashboard loads the saved workspace.
 - Home calendar sync works.
 - The backend sync status looks healthy.
+- Motivation quotes should be cached for the day so opening the app does not call the model every time.
 
 ## What to keep private
 
