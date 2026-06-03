@@ -4,6 +4,31 @@
 
 Deploy the public MyAxis app with Terraform and GitHub Actions.
 
+## When you are ready
+
+You can deploy when these are true:
+
+- The repo is on GitHub.
+- Terraform files are in place.
+- The AWS account is ready.
+- Cognito is set up.
+- GitHub Actions variables are ready.
+- You are okay with the public app using the cloud backend.
+
+## Deploy checklist
+
+1. Create or confirm your AWS account.
+2. Pick a region and keep it consistent.
+3. Run `terraform init` in the `infra/` folder.
+4. Review the Terraform plan.
+5. Create the AWS resources.
+6. Copy the Terraform outputs you need.
+7. Set the GitHub repository variables.
+8. Set the Cognito callback and logout URLs.
+9. Build the app with the deploy variables.
+10. Push to `main` and let GitHub Actions deploy.
+11. Open the site and test login, dashboard load, and Home calendar sync.
+
 ## How it works
 
 1. Terraform creates the AWS resources.
@@ -18,6 +43,14 @@ Deploy the public MyAxis app with Terraform and GitHub Actions.
 - Cognito for login
 - DynamoDB for user and workspace data
 - Lambda and API Gateway for backend requests
+
+## What to check after deploy
+
+- The site opens from CloudFront.
+- Login works.
+- The dashboard loads the saved workspace.
+- Home calendar sync works.
+- The backend sync status looks healthy.
 
 ## What to keep private
 

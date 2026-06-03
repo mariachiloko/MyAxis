@@ -68,6 +68,7 @@ The current version is focused on a clean, modular dashboard shell with local-fi
 
 ## Deployment phase
 
+- Start with [docs/runbooks/deploy.md](docs/runbooks/deploy.md) for the simple deploy checklist.
 - Terraform provisions the static site, auth, data tables, API, and deploy role
 - GitHub Actions builds the app, syncs `dist/` to S3, and invalidates CloudFront
 - GitHub Actions assumes an AWS role through OIDC instead of storing AWS keys in the repo
