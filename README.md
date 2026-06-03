@@ -31,6 +31,13 @@ A private-safe, Skylight-inspired dashboard for work, projects, study, and home 
 
 Open the static site with a local web server, then edit `config.example.js` and optionally add a `config.local.js` file for your private setup.
 
+## Repo layout
+
+- `app.js`, `index.html`, and `styles.css` are the public dashboard shell
+- `infra/` contains the AWS/Terraform scaffold for the future serverless deployment path
+- `scripts/build.sh` creates a simple static build output in `dist/`
+- `.github/workflows/` will hold the CI and deployment workflows
+
 ## Customization
 
 - `config.example.js` is the public-safe starter config
@@ -50,4 +57,4 @@ Open the static site with a local web server, then edit `config.example.js` and 
 
 ## Current state
 
-The current version is focused on a clean, modular dashboard shell with local-first state management, plus optional Home workspace Google Calendar sync. The next step is adding a Terraform/AWS deploy path for the public starter while keeping your private setup local only.
+The current version is focused on a clean, modular dashboard shell with local-first state management, plus optional Home workspace Google Calendar sync. The repo now includes the first Terraform/AWS scaffold and a basic build path so the project can evolve into a serverless deployment in phases.

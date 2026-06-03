@@ -8,4 +8,9 @@ private-content/resume/
 .env.*
 node_modules/
 dist/
-
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+infra/*.tfvars.json
+infra/*.zip
