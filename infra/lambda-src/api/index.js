@@ -458,6 +458,14 @@ function sanitizeWorkspaceLocalState(state) {
     next.captureFollow = state.captureFollow;
   }
 
+  if (typeof state.captureCalculator === "string") {
+    next.captureCalculator = state.captureCalculator;
+  }
+
+  if (state.captureBoard && typeof state.captureBoard === "object") {
+    next.captureBoard = state.captureBoard;
+  }
+
   if (Array.isArray(state.kanban)) {
     next.kanban = state.kanban;
   }

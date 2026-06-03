@@ -83,7 +83,9 @@ const appState = {
   motivationQuoteRequestId: 0,
   calendarView: getStoredCalendarView(),
   calendarAnchor: getStoredCalendarAnchor(),
-  scheduleDay: getStoredScheduleDay()
+  scheduleDay: getStoredScheduleDay(),
+  backendStateSyncTimers: new Map(),
+  backendStateSyncSuspended: false
 };
 
 const tabsEl = document.getElementById("workspace-tabs");
@@ -1630,6 +1632,7 @@ function getFlashcardsState(workspace) {
 
 function saveFlashcardsState(workspaceId, cards) {
   localStorage.setItem(getFlashcardStorageKey(workspaceId), JSON.stringify(cards));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function mergeFlashcardLists(baseCards, storedCards) {
@@ -2185,6 +2188,7 @@ function getStoredCaptureCalculatorValue(workspaceId) {
 
 function setCaptureCalculatorValue(workspaceId, value) {
   localStorage.setItem(getCaptureCalculatorStorageKey(workspaceId), value);
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function getCaptureBoardStorageKey(workspaceId) {
@@ -2202,6 +2206,7 @@ function getStoredCaptureBoard(workspaceId) {
 
 function saveCaptureBoard(workspaceId, state) {
   localStorage.setItem(getCaptureBoardStorageKey(workspaceId), JSON.stringify(state));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function getStoredCaptureAssistant(workspaceId) {
@@ -2210,6 +2215,7 @@ function getStoredCaptureAssistant(workspaceId) {
 
 function saveCaptureAssistant(workspaceId, state) {
   localStorage.setItem(getCaptureAssistantStorageKey(workspaceId), JSON.stringify(normalizeCaptureAssistant(state)));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function clearCaptureAssistant(workspaceId) {
@@ -3228,70 +3234,72 @@ async function hydrateBackendAccountState() {
   let nextDefaultWorkspace = config.defaultWorkspace;
   let overridesChanged = false;
 
-  if (Array.isArray(payload.workspaceSettings)) {
-    const nextOverrides = readStoredJson(STORAGE_KEYS.uiOverrides, {});
-    const nextWorkspaces = Array.isArray(nextOverrides.workspaces) ? [...nextOverrides.workspaces] : [];
+  await withBackendStateSyncSuppressed(async () => {
+    if (Array.isArray(payload.workspaceSettings)) {
+      const nextOverrides = readStoredJson(STORAGE_KEYS.uiOverrides, {});
+      const nextWorkspaces = Array.isArray(nextOverrides.workspaces) ? [...nextOverrides.workspaces] : [];
 
-    for (const item of payload.workspaceSettings) {
-      const workspaceId = String(item?.workspaceId || "").trim();
-      if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
-        continue;
+      for (const item of payload.workspaceSettings) {
+        const workspaceId = String(item?.workspaceId || "").trim();
+        if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
+          continue;
+        }
+
+        const settings = normalizeBackendWorkspaceSettings(item.settings);
+        if (!Object.keys(settings).length) {
+          continue;
+        }
+
+        const index = nextWorkspaces.findIndex((workspace) => workspace.id === workspaceId);
+        const nextWorkspace = {
+          ...(index === -1 ? { id: workspaceId } : nextWorkspaces[index]),
+          ...settings,
+          id: workspaceId
+        };
+
+        if (index === -1) {
+          nextWorkspaces.push(nextWorkspace);
+        } else {
+          nextWorkspaces[index] = nextWorkspace;
+        }
+
+        if (settings.defaultWorkspace) {
+          nextDefaultWorkspace = settings.defaultWorkspace;
+        }
+
+        overridesChanged = true;
       }
 
-      const settings = normalizeBackendWorkspaceSettings(item.settings);
-      if (!Object.keys(settings).length) {
-        continue;
-      }
-
-      const index = nextWorkspaces.findIndex((workspace) => workspace.id === workspaceId);
-      const nextWorkspace = {
-        ...(index === -1 ? { id: workspaceId } : nextWorkspaces[index]),
-        ...settings,
-        id: workspaceId
-      };
-
-      if (index === -1) {
-        nextWorkspaces.push(nextWorkspace);
-      } else {
-        nextWorkspaces[index] = nextWorkspace;
-      }
-
-      if (settings.defaultWorkspace) {
-        nextDefaultWorkspace = settings.defaultWorkspace;
-      }
-
-      overridesChanged = true;
-    }
-
-    if (overridesChanged) {
-      uiOverrides = {
-        ...nextOverrides,
-        defaultWorkspace: nextDefaultWorkspace,
-        workspaces: nextWorkspaces
-      };
-      persistUiOverrides();
-    }
-  }
-
-  if (Array.isArray(payload.calendarConnections)) {
-    for (const item of payload.calendarConnections) {
-      const workspaceId = String(item?.workspaceId || "").trim();
-      if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
-        continue;
-      }
-
-      const connection = normalizeBackendCalendarConnection(item.connection);
-      if (connection) {
-        saveHomeCalendarConnection(workspaceId, connection);
+      if (overridesChanged) {
+        uiOverrides = {
+          ...nextOverrides,
+          defaultWorkspace: nextDefaultWorkspace,
+          workspaces: nextWorkspaces
+        };
+        persistUiOverrides();
       }
     }
-  }
 
-  if (Array.isArray(payload.workspaceStates)) {
-    for (const item of payload.workspaceStates) {
-      applyBackendWorkspaceRecord(item);
+    if (Array.isArray(payload.calendarConnections)) {
+      for (const item of payload.calendarConnections) {
+        const workspaceId = String(item?.workspaceId || "").trim();
+        if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
+          continue;
+        }
+
+        const connection = normalizeBackendCalendarConnection(item.connection);
+        if (connection) {
+          saveHomeCalendarConnection(workspaceId, connection);
+        }
+      }
     }
-  }
+
+    if (Array.isArray(payload.workspaceStates)) {
+      for (const item of payload.workspaceStates) {
+        applyBackendWorkspaceRecord(item);
+      }
+    }
+  });
 
   if (overridesChanged) {
     config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
@@ -3338,6 +3346,45 @@ async function syncWorkspaceStateToBackend(workspaceId) {
     method: "PUT",
     body: snapshot
   });
+}
+
+async function withBackendStateSyncSuppressed(task) {
+  const previous = appState.backendStateSyncSuspended;
+  appState.backendStateSyncSuspended = true;
+  try {
+    return await task();
+  } finally {
+    appState.backendStateSyncSuspended = previous;
+  }
+}
+
+function scheduleWorkspaceStateSync(workspaceId) {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl || appState.backendStateSyncSuspended) {
+    return;
+  }
+
+  const key = String(workspaceId || "").trim();
+  if (!key) {
+    return;
+  }
+
+  const existingTimer = appState.backendStateSyncTimers.get(key);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const timer = setTimeout(() => {
+    appState.backendStateSyncTimers.delete(key);
+    if (appState.backendStateSyncSuspended) {
+      return;
+    }
+    syncWorkspaceStateToBackend(key).catch((error) => {
+      console.warn("Unable to auto-sync workspace state to backend.", error);
+    });
+  }, 800);
+
+  appState.backendStateSyncTimers.set(key, timer);
 }
 
 async function syncHomeCalendarConnectionToBackend(workspaceId) {
@@ -3514,6 +3561,8 @@ function getWorkspaceBackendSnapshot(workspaceId) {
       captureMode: getStoredCaptureMode(workspace.id),
       captureFollow: getStoredCaptureFollow(workspace.id),
       captureFollowSide: getStoredCaptureFollowSide(workspace.id),
+      captureCalculator: getStoredCaptureCalculatorValue(workspace.id),
+      captureBoard: getStoredCaptureBoard(workspace.id),
       captureAssistant: getStoredCaptureAssistant(workspace.id),
       flashcards: getFlashcardsState(workspace)
     }
@@ -3597,6 +3646,14 @@ function applyBackendWorkspaceRecord(record) {
 
   if (state.captureMode === "notes" || state.captureMode === "calculator" || state.captureMode === "board" || state.captureMode === "assistant") {
     localStorage.setItem(getCaptureModeStorageKey(workspaceId), state.captureMode);
+  }
+
+  if (typeof state.captureCalculator === "string") {
+    setCaptureCalculatorValue(workspaceId, state.captureCalculator);
+  }
+
+  if (state.captureBoard && typeof state.captureBoard === "object") {
+    saveCaptureBoard(workspaceId, state.captureBoard);
   }
 
   if (state.captureAssistant && typeof state.captureAssistant === "object") {
@@ -4308,6 +4365,7 @@ function getScheduleState(workspace) {
 
 function saveScheduleState(workspaceId, entries) {
   localStorage.setItem(getScheduleStorageKey(workspaceId), JSON.stringify(entries));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function mergeScheduleLists(baseEntries, storedEntries, workspaceId) {
@@ -4474,6 +4532,7 @@ function getHomeState(workspace) {
 
 function saveHomeState(workspaceId, state) {
   localStorage.setItem(getHomeStorageKey(workspaceId), JSON.stringify(state));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function getHomeCalendarConnectionStorageKey(workspaceId) {
@@ -4509,6 +4568,7 @@ function getHomeCalendarConnection(workspaceId) {
 
 function saveHomeCalendarConnection(workspaceId, connection) {
   localStorage.setItem(getHomeCalendarConnectionStorageKey(workspaceId), JSON.stringify(connection));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function getHomeCalendarCache(workspaceId) {
@@ -4523,12 +4583,14 @@ function getHomeCalendarCache(workspaceId) {
 function saveHomeCalendarCache(workspaceId, events) {
   const normalized = Array.isArray(events) ? events.map((event) => normalizeCachedGoogleCalendarEvent(event)) : [];
   localStorage.setItem(getHomeCalendarCacheStorageKey(workspaceId), JSON.stringify(normalized));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function clearHomeCalendarConnection(workspaceId) {
   localStorage.removeItem(getHomeCalendarConnectionStorageKey(workspaceId));
   localStorage.removeItem(getHomeCalendarCacheStorageKey(workspaceId));
   clearStoredGoogleCalendarToken(workspaceId);
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function getHiddenCalendarEventsStorageKey(workspaceId) {
@@ -4543,6 +4605,7 @@ function getHiddenCalendarEvents(workspaceId) {
 function saveHiddenCalendarEvents(workspaceId, eventIds) {
   const uniqueIds = Array.from(new Set((Array.isArray(eventIds) ? eventIds : []).filter((value) => typeof value === "string" && value.trim())));
   localStorage.setItem(getHiddenCalendarEventsStorageKey(workspaceId), JSON.stringify(uniqueIds));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function hideCalendarEventFromDashboard(workspaceId, eventKey) {
@@ -4620,6 +4683,7 @@ function getCalendarTodoState(workspaceId) {
 function saveCalendarTodoState(workspaceId, items) {
   const normalized = normalizeCalendarTodoState(items, workspaceId);
   localStorage.setItem(getCalendarTodoStorageKey(workspaceId), JSON.stringify(normalized));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function normalizeCalendarTodoState(items, workspaceId) {
@@ -5429,6 +5493,8 @@ function exportBackup() {
         captureMode: getStoredCaptureMode(workspace.id),
         captureFollow: getStoredCaptureFollow(workspace.id),
         captureFollowSide: getStoredCaptureFollowSide(workspace.id),
+        captureCalculator: getStoredCaptureCalculatorValue(workspace.id),
+        captureBoard: getStoredCaptureBoard(workspace.id),
         captureAssistant: getStoredCaptureAssistant(workspace.id),
         flashcards: getFlashcardsState(workspace)
       }))
@@ -5501,75 +5567,89 @@ function applyStateBackup(state) {
   }
 
   if (Array.isArray(state.workspaces)) {
-    for (const workspaceState of state.workspaces) {
-      const workspaceExists = config.workspaces.some((workspace) => workspace.id === workspaceState.id);
-      if (!workspaceExists) {
-        continue;
-      }
-      const workspace = getWorkspace(workspaceState.id);
+    const previous = appState.backendStateSyncSuspended;
+    appState.backendStateSyncSuspended = true;
+    try {
+      for (const workspaceState of state.workspaces) {
+        const workspaceExists = config.workspaces.some((workspace) => workspace.id === workspaceState.id);
+        if (!workspaceExists) {
+          continue;
+        }
+        const workspace = getWorkspace(workspaceState.id);
 
-      if (typeof workspaceState.scratchpad === "string") {
-        localStorage.setItem(workspace.scratchpadKey, workspaceState.scratchpad);
-      }
+        if (typeof workspaceState.scratchpad === "string") {
+          localStorage.setItem(workspace.scratchpadKey, workspaceState.scratchpad);
+        }
 
-      if (workspaceState.kanban) {
-        saveKanbanState(workspaceState.id, workspaceState.kanban);
-      }
+        if (workspaceState.kanban) {
+          saveKanbanState(workspaceState.id, workspaceState.kanban);
+        }
 
-      if (Array.isArray(workspaceState.schedule)) {
-        saveScheduleState(workspaceState.id, normalizeScheduleEntries(workspaceState.schedule, workspaceState.id));
-      }
+        if (Array.isArray(workspaceState.schedule)) {
+          saveScheduleState(workspaceState.id, normalizeScheduleEntries(workspaceState.schedule, workspaceState.id));
+        }
 
-      if (workspaceState.home && typeof workspaceState.home === "object") {
-        saveHomeState(workspaceState.id, normalizeHomeState(workspaceState.home, workspace));
-      }
+        if (workspaceState.home && typeof workspaceState.home === "object") {
+          saveHomeState(workspaceState.id, normalizeHomeState(workspaceState.home, workspace));
+        }
 
-      if (workspaceState.homeCalendarConnection && typeof workspaceState.homeCalendarConnection === "object") {
-        saveHomeCalendarConnection(workspaceState.id, {
-          provider: workspaceState.homeCalendarConnection.provider === "google" ? "google" : "google",
-          enabled: Boolean(workspaceState.homeCalendarConnection.enabled),
-          clientId: String(workspaceState.homeCalendarConnection.clientId || "").trim(),
-          calendarId: String(workspaceState.homeCalendarConnection.calendarId || "primary").trim() || "primary",
-          lastSyncAt: String(workspaceState.homeCalendarConnection.lastSyncAt || ""),
-          lastError: String(workspaceState.homeCalendarConnection.lastError || "")
-        });
-      }
+        if (workspaceState.homeCalendarConnection && typeof workspaceState.homeCalendarConnection === "object") {
+          saveHomeCalendarConnection(workspaceState.id, {
+            provider: workspaceState.homeCalendarConnection.provider === "google" ? "google" : "google",
+            enabled: Boolean(workspaceState.homeCalendarConnection.enabled),
+            clientId: String(workspaceState.homeCalendarConnection.clientId || "").trim(),
+            calendarId: String(workspaceState.homeCalendarConnection.calendarId || "primary").trim() || "primary",
+            lastSyncAt: String(workspaceState.homeCalendarConnection.lastSyncAt || ""),
+            lastError: String(workspaceState.homeCalendarConnection.lastError || "")
+          });
+        }
 
-      if (Array.isArray(workspaceState.homeCalendarCache)) {
-        saveHomeCalendarCache(workspaceState.id, workspaceState.homeCalendarCache);
-      }
+        if (Array.isArray(workspaceState.homeCalendarCache)) {
+          saveHomeCalendarCache(workspaceState.id, workspaceState.homeCalendarCache);
+        }
 
-      if (Array.isArray(workspaceState.hiddenCalendarEvents)) {
-        saveHiddenCalendarEvents(workspaceState.id, workspaceState.hiddenCalendarEvents);
-      }
+        if (Array.isArray(workspaceState.hiddenCalendarEvents)) {
+          saveHiddenCalendarEvents(workspaceState.id, workspaceState.hiddenCalendarEvents);
+        }
 
-      if (Array.isArray(workspaceState.calendarTodos)) {
-        saveCalendarTodoState(workspaceState.id, workspaceState.calendarTodos);
-      }
+        if (Array.isArray(workspaceState.calendarTodos)) {
+          saveCalendarTodoState(workspaceState.id, workspaceState.calendarTodos);
+        }
 
-      if (typeof workspaceState.homeMenuDay === "string" && DAY_ORDER.includes(workspaceState.homeMenuDay)) {
-        localStorage.setItem(getHomeMenuDayStorageKey(workspaceState.id), workspaceState.homeMenuDay);
-      }
+        if (typeof workspaceState.homeMenuDay === "string" && DAY_ORDER.includes(workspaceState.homeMenuDay)) {
+          localStorage.setItem(getHomeMenuDayStorageKey(workspaceState.id), workspaceState.homeMenuDay);
+        }
 
-      if (typeof workspaceState.captureFollow === "boolean") {
-        localStorage.setItem(getCaptureFollowStorageKey(workspaceState.id), String(workspaceState.captureFollow));
-      }
+        if (typeof workspaceState.captureFollow === "boolean") {
+          localStorage.setItem(getCaptureFollowStorageKey(workspaceState.id), String(workspaceState.captureFollow));
+        }
 
-      if (workspaceState.captureFollowSide === "left" || workspaceState.captureFollowSide === "right") {
-        localStorage.setItem(getCaptureFollowSideStorageKey(workspaceState.id), workspaceState.captureFollowSide);
-      }
+        if (workspaceState.captureFollowSide === "left" || workspaceState.captureFollowSide === "right") {
+          localStorage.setItem(getCaptureFollowSideStorageKey(workspaceState.id), workspaceState.captureFollowSide);
+        }
 
-      if (workspaceState.captureMode === "notes" || workspaceState.captureMode === "calculator" || workspaceState.captureMode === "board" || workspaceState.captureMode === "assistant") {
-        localStorage.setItem(getCaptureModeStorageKey(workspaceState.id), workspaceState.captureMode);
-      }
+        if (workspaceState.captureMode === "notes" || workspaceState.captureMode === "calculator" || workspaceState.captureMode === "board" || workspaceState.captureMode === "assistant") {
+          localStorage.setItem(getCaptureModeStorageKey(workspaceState.id), workspaceState.captureMode);
+        }
 
-      if (workspaceState.captureAssistant && typeof workspaceState.captureAssistant === "object") {
-        saveCaptureAssistant(workspaceState.id, workspaceState.captureAssistant);
-      }
+        if (typeof workspaceState.captureCalculator === "string") {
+          setCaptureCalculatorValue(workspaceState.id, workspaceState.captureCalculator);
+        }
 
-      if (Array.isArray(workspaceState.flashcards)) {
-        saveFlashcardsState(workspaceState.id, normalizeFlashcards(workspaceState.flashcards));
+        if (workspaceState.captureBoard && typeof workspaceState.captureBoard === "object") {
+          saveCaptureBoard(workspaceState.id, workspaceState.captureBoard);
+        }
+
+        if (workspaceState.captureAssistant && typeof workspaceState.captureAssistant === "object") {
+          saveCaptureAssistant(workspaceState.id, workspaceState.captureAssistant);
+        }
+
+        if (Array.isArray(workspaceState.flashcards)) {
+          saveFlashcardsState(workspaceState.id, normalizeFlashcards(workspaceState.flashcards));
+        }
       }
+    } finally {
+      appState.backendStateSyncSuspended = previous;
     }
   }
 }
@@ -5593,6 +5673,7 @@ function getKanbanState(workspace) {
 
 function saveKanbanState(workspaceId, state) {
   localStorage.setItem(getKanbanStorageKey(workspaceId), JSON.stringify(state));
+  scheduleWorkspaceStateSync(workspaceId);
 }
 
 function moveKanbanCard(workspaceId, fromColumnId, cardId, toColumnId, beforeCardId) {
