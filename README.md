@@ -34,9 +34,9 @@ Open the static site with a local web server, then edit `config.example.js` and 
 ## Repo layout
 
 - `app.js`, `index.html`, and `styles.css` are the public dashboard shell
-- `infra/` contains the AWS/Terraform scaffold for the future serverless deployment path
+- `infra/` contains the AWS/Terraform scaffold for the serverless deployment path
 - `scripts/build.sh` creates a simple static build output in `dist/`
-- `.github/workflows/` will hold the CI and deployment workflows
+- `.github/workflows/` contains CI and deployment workflows
 
 ## Customization
 
@@ -58,3 +58,15 @@ Open the static site with a local web server, then edit `config.example.js` and 
 ## Current state
 
 The current version is focused on a clean, modular dashboard shell with local-first state management, plus optional Home workspace Google Calendar sync. The repo now includes the first Terraform/AWS scaffold and a basic build path so the project can evolve into a serverless deployment in phases.
+
+## Deployment phase
+
+- Terraform provisions the static site, auth, data tables, API, and deploy role
+- GitHub Actions builds the app, syncs `dist/` to S3, and invalidates CloudFront
+- GitHub Actions assumes an AWS role through OIDC instead of storing AWS keys in the repo
+- Set these GitHub repository variables before enabling the deploy workflow:
+  - `AWS_REGION`
+  - `AWS_ROLE_ARN`
+  - `SITE_BUCKET`
+  - `CLOUDFRONT_DISTRIBUTION_ID`
+- Terraform outputs the bucket name, CloudFront domain, API endpoint, Cognito IDs, and deploy role ARN
