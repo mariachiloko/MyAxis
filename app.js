@@ -58,9 +58,10 @@ const LAYOUT_SPANS = [4, 6, 8, 12];
 const LEGACY_DEFAULT_LAYOUT_ORDER = ["hero", "schedule", "calendar", "kanban", "spotlight", "goals", "capture"];
 
 let localConfig = await loadLocalConfig();
+let runtimeConfig = loadRuntimeConfig();
 let importedConfig = readStoredJson(STORAGE_KEYS.importedConfig, {});
 let uiOverrides = readStoredJson(STORAGE_KEYS.uiOverrides, {});
-let config = mergeDashboardConfig(defaultConfig, importedConfig, localConfig, uiOverrides);
+let config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
 let layoutState = normalizeLayoutState(readStoredJson(STORAGE_KEYS.layout, null));
 
 const appState = {
@@ -2803,6 +2804,10 @@ function updateBackendSyncStatus(message = "") {
     : "No cloud sync configured yet.";
 }
 
+function loadRuntimeConfig() {
+  return window.__MYAXIS_RUNTIME_CONFIG__ || {};
+}
+
 function persistBackendSyncConfig({ baseUrl = "", accessToken = "" }) {
   const nextBaseUrl = String(baseUrl || "").trim().replace(/\/+$/, "");
   const nextAccessToken = String(accessToken || "").trim();
@@ -3282,7 +3287,7 @@ async function hydrateBackendAccountState() {
   }
 
   if (overridesChanged) {
-    config = mergeDashboardConfig(defaultConfig, importedConfig, localConfig, uiOverrides);
+    config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
     populateEditorSelects();
   }
 
@@ -5117,7 +5122,7 @@ function handleWorkspaceSettingsSubmit(event) {
 
   setWorkspaceOverride(workspaceId, patch);
   setAppDefaultWorkspace(defaultWorkspace);
-  config = mergeDashboardConfig(defaultConfig, importedConfig, localConfig, uiOverrides);
+  config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
   populateEditorSelects();
   renderTabs();
   renderWorkspace(getWorkspace(appState.workspaceId));
@@ -5134,7 +5139,7 @@ function resetWorkspaceOverrides() {
 
   uiOverrides = {};
   localStorage.removeItem(STORAGE_KEYS.uiOverrides);
-  config = mergeDashboardConfig(defaultConfig, importedConfig, localConfig, uiOverrides);
+  config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
   populateEditorSelects();
   renderTabs();
   renderWorkspace(getWorkspace(appState.workspaceId));
@@ -5178,7 +5183,7 @@ function setAppDefaultWorkspace(workspaceId) {
 
 function persistUiOverrides() {
   localStorage.setItem(STORAGE_KEYS.uiOverrides, JSON.stringify(uiOverrides));
-  config = mergeDashboardConfig(defaultConfig, importedConfig, localConfig, uiOverrides);
+  config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
 }
 
 function findKanbanCard(state, cardId) {
@@ -5282,7 +5287,7 @@ function importBackup(payload) {
     if (payload.config) {
       localStorage.setItem(STORAGE_KEYS.importedConfig, JSON.stringify(payload.config));
       importedConfig = readStoredJson(STORAGE_KEYS.importedConfig, {});
-      config = mergeDashboardConfig(defaultConfig, importedConfig, localConfig, uiOverrides);
+      config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
       populateEditorSelects();
     }
 

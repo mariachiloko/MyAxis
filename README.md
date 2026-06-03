@@ -37,6 +37,7 @@ Open the static site with a local web server, then edit `config.example.js` and 
 - `app.js`, `index.html`, and `styles.css` are the public dashboard shell
 - `infra/` contains the AWS/Terraform scaffold for the serverless deployment path
 - `scripts/build.sh` creates a simple static build output in `dist/`
+- `runtime-config.js` is the public-safe runtime config hook that gets populated during build
 - `scripts/package-api.sh` installs the Lambda dependencies before a Terraform apply
 - `.github/workflows/` contains CI and deployment workflows
 
@@ -73,8 +74,16 @@ The current version is focused on a clean, modular dashboard shell with local-fi
   - `AWS_ROLE_ARN`
   - `SITE_BUCKET`
   - `CLOUDFRONT_DISTRIBUTION_ID`
+  - `MYAXIS_API_BASE_URL`
+  - `MYAXIS_COGNITO_REGION`
+  - `MYAXIS_COGNITO_USER_POOL_ID`
+  - `MYAXIS_COGNITO_CLIENT_ID`
+  - `MYAXIS_COGNITO_HOSTED_UI_DOMAIN`
+  - `MYAXIS_COGNITO_REDIRECT_URI`
+  - `MYAXIS_COGNITO_LOGOUT_URI`
 - Terraform outputs the bucket name, CloudFront domain, API endpoint, Cognito IDs, and deploy role ARN
 - Run `./scripts/package-api.sh` before `terraform apply` so the Lambda zip includes its Node dependencies
+- Run `./scripts/build.sh` with those `MYAXIS_*` variables set to generate `dist/runtime-config.js` for the deployed site
 
 ## Backend API
 

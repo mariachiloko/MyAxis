@@ -1,0 +1,1 @@
+window.__MYAXIS_RUNTIME_CONFIG__ = window.__MYAXIS_RUNTIME_CONFIG__ || {};
