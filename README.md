@@ -36,6 +36,7 @@ Open the static site with a local web server, then edit `config.example.js` and 
 
 - `app.js`, `index.html`, and `styles.css` are the public dashboard shell
 - `infra/` contains the AWS/Terraform scaffold for the serverless deployment path
+- `docs/runbooks/` contains short public runbooks for local use, backend sync, calendar sync, and deploy
 - `scripts/build.sh` creates a simple static build output in `dist/`
 - `runtime-config.js` is the public-safe runtime config hook that gets populated during build
 - `scripts/package-api.sh` installs the Lambda dependencies before a Terraform apply
