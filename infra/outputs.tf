@@ -29,3 +29,7 @@ output "cognito_hosted_ui_domain" {
 output "github_actions_deploy_role_arn" {
   value = aws_iam_role.github_actions_deploy.arn
 }
+
+output "workspace_state_table_name" {
+  value = aws_dynamodb_table.workspace_state.name
+}

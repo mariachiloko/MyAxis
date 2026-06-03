@@ -2851,6 +2851,7 @@ async function handleBackendSyncCurrentClick() {
 
   const workspace = getWorkspace(appState.workspaceId);
   await syncWorkspaceSettingsToBackend(workspace.id);
+  await syncWorkspaceStateToBackend(workspace.id);
   if (workspace.id === "home") {
     await syncHomeCalendarConnectionToBackend("home");
   }
@@ -3286,6 +3287,12 @@ async function hydrateBackendAccountState() {
     }
   }
 
+  if (Array.isArray(payload.workspaceStates)) {
+    for (const item of payload.workspaceStates) {
+      applyBackendWorkspaceRecord(item);
+    }
+  }
+
   if (overridesChanged) {
     config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
     populateEditorSelects();
@@ -3317,6 +3324,19 @@ async function syncWorkspaceSettingsToBackend(workspaceId) {
   return backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/settings`, {
     method: "PUT",
     body: payload
+  });
+}
+
+async function syncWorkspaceStateToBackend(workspaceId) {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl) {
+    return null;
+  }
+
+  const snapshot = getWorkspaceBackendSnapshot(workspaceId);
+  return backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/state`, {
+    method: "PUT",
+    body: snapshot
   });
 }
 
@@ -3422,6 +3442,22 @@ function normalizeBackendWorkspaceSettings(settings) {
     normalized.accent2 = normalizeHexColor(settings.accent2);
   }
 
+  for (const key of ["stats", "schedule", "kanban", "calendar", "goals"]) {
+    if (Array.isArray(settings[key])) {
+      normalized[key] = settings[key];
+    }
+  }
+
+  if (settings.spotlight && typeof settings.spotlight === "object") {
+    normalized.spotlight = settings.spotlight;
+  }
+
+  for (const key of ["quote", "captureHint", "scratchpadKey", "eyebrow"]) {
+    if (String(settings[key] || "").trim()) {
+      normalized[key] = String(settings[key]).trim();
+    }
+  }
+
   if (String(settings.defaultWorkspace || "").trim()) {
     normalized.defaultWorkspace = String(settings.defaultWorkspace).trim();
   }
@@ -3442,6 +3478,134 @@ function normalizeBackendCalendarConnection(connection) {
     lastSyncAt: String(connection.lastSyncAt || ""),
     lastError: String(connection.lastError || "")
   };
+}
+
+function getWorkspaceBackendSnapshot(workspaceId) {
+  const workspace = getWorkspace(workspaceId);
+  return {
+    workspace: {
+      id: workspace.id,
+      label: workspace.label || "",
+      eyebrow: workspace.eyebrow || "",
+      title: workspace.title || "",
+      description: workspace.description || "",
+      accent: workspace.accent || "",
+      accent2: workspace.accent2 || "",
+      stats: Array.isArray(workspace.stats) ? workspace.stats : [],
+      schedule: Array.isArray(workspace.schedule) ? workspace.schedule : [],
+      kanban: Array.isArray(workspace.kanban) ? workspace.kanban : [],
+      calendar: Array.isArray(workspace.calendar) ? workspace.calendar : [],
+      goals: Array.isArray(workspace.goals) ? workspace.goals : [],
+      spotlight: workspace.spotlight && typeof workspace.spotlight === "object" ? workspace.spotlight : {},
+      quote: workspace.quote || "",
+      captureHint: workspace.captureHint || "",
+      scratchpadKey: workspace.scratchpadKey || ""
+    },
+    state: {
+      scratchpad: localStorage.getItem(workspace.scratchpadKey) || "",
+      kanban: getKanbanState(workspace),
+      schedule: getScheduleState(workspace),
+      home: getHomeState(workspace),
+      homeCalendarConnection: getHomeCalendarConnection(workspace.id),
+      homeCalendarCache: getHomeCalendarCache(workspace.id),
+      hiddenCalendarEvents: getHiddenCalendarEvents(workspace.id),
+      calendarTodos: getCalendarTodoState(workspace.id),
+      homeMenuDay: getStoredHomeMenuDay(workspace.id),
+      captureMode: getStoredCaptureMode(workspace.id),
+      captureFollow: getStoredCaptureFollow(workspace.id),
+      captureFollowSide: getStoredCaptureFollowSide(workspace.id),
+      captureAssistant: getStoredCaptureAssistant(workspace.id),
+      flashcards: getFlashcardsState(workspace)
+    }
+  };
+}
+
+function applyBackendWorkspaceRecord(record) {
+  if (!record || typeof record !== "object") {
+    return;
+  }
+
+  const workspaceId = String(record.workspaceId || "").trim();
+  if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
+    return;
+  }
+
+  if (record.workspace && typeof record.workspace === "object") {
+    const workspacePatch = normalizeBackendWorkspaceSettings(record.workspace);
+    const patch = {
+      id: workspaceId,
+      ...workspacePatch
+    };
+    if (Object.keys(workspacePatch).length) {
+      setWorkspaceOverride(workspaceId, patch);
+    }
+  }
+
+  const state = record.state && typeof record.state === "object" ? record.state : {};
+  const workspace = getWorkspace(workspaceId);
+
+  if (typeof state.scratchpad === "string") {
+    localStorage.setItem(workspace.scratchpadKey, state.scratchpad);
+  }
+
+  if (Array.isArray(state.kanban)) {
+    saveKanbanState(workspaceId, state.kanban);
+  }
+
+  if (Array.isArray(state.schedule)) {
+    saveScheduleState(workspaceId, normalizeScheduleEntries(state.schedule, workspaceId));
+  }
+
+  if (state.home && typeof state.home === "object") {
+    saveHomeState(workspaceId, normalizeHomeState(state.home, workspace));
+  }
+
+  if (state.homeCalendarConnection && typeof state.homeCalendarConnection === "object") {
+    saveHomeCalendarConnection(workspaceId, {
+      provider: state.homeCalendarConnection.provider === "google" ? "google" : "google",
+      enabled: Boolean(state.homeCalendarConnection.enabled),
+      clientId: String(state.homeCalendarConnection.clientId || "").trim(),
+      calendarId: String(state.homeCalendarConnection.calendarId || "primary").trim() || "primary",
+      lastSyncAt: String(state.homeCalendarConnection.lastSyncAt || ""),
+      lastError: String(state.homeCalendarConnection.lastError || "")
+    });
+  }
+
+  if (Array.isArray(state.homeCalendarCache)) {
+    saveHomeCalendarCache(workspaceId, state.homeCalendarCache);
+  }
+
+  if (Array.isArray(state.hiddenCalendarEvents)) {
+    saveHiddenCalendarEvents(workspaceId, state.hiddenCalendarEvents);
+  }
+
+  if (Array.isArray(state.calendarTodos)) {
+    saveCalendarTodoState(workspaceId, state.calendarTodos);
+  }
+
+  if (typeof state.homeMenuDay === "string" && DAY_ORDER.includes(state.homeMenuDay)) {
+    localStorage.setItem(getHomeMenuDayStorageKey(workspaceId), state.homeMenuDay);
+  }
+
+  if (typeof state.captureFollow === "boolean") {
+    localStorage.setItem(getCaptureFollowStorageKey(workspaceId), String(state.captureFollow));
+  }
+
+  if (state.captureFollowSide === "left" || state.captureFollowSide === "right") {
+    localStorage.setItem(getCaptureFollowSideStorageKey(workspaceId), state.captureFollowSide);
+  }
+
+  if (state.captureMode === "notes" || state.captureMode === "calculator" || state.captureMode === "board" || state.captureMode === "assistant") {
+    localStorage.setItem(getCaptureModeStorageKey(workspaceId), state.captureMode);
+  }
+
+  if (state.captureAssistant && typeof state.captureAssistant === "object") {
+    saveCaptureAssistant(workspaceId, state.captureAssistant);
+  }
+
+  if (Array.isArray(state.flashcards)) {
+    saveFlashcardsState(workspaceId, normalizeFlashcards(state.flashcards));
+  }
 }
 
 function syncHomeCalendarSection(workspaceOrId) {

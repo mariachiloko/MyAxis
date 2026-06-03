@@ -91,6 +91,7 @@ The current version is focused on a clean, modular dashboard shell with local-fi
 - `GET /v1/me` for the signed-in user plus stored workspace state
 - `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/settings`
 - `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/calendar-connection`
+- `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/state`
 - The API expects a Cognito JWT on authenticated routes
 - The Settings drawer includes private `Cloud sync` and `Cognito sign-in` sections for backend access
 - The Cognito section expects your region, user pool ID, client ID, hosted UI domain, and redirect/logout URIs

@@ -12,7 +12,8 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLES = {
   users: process.env.USERS_TABLE,
   workspaceSettings: process.env.WORKSPACE_SETTINGS_TABLE,
-  calendarConnections: process.env.CALENDAR_CONNECTIONS_TABLE
+  calendarConnections: process.env.CALENDAR_CONNECTIONS_TABLE,
+  workspaceState: process.env.WORKSPACE_STATE_TABLE
 };
 
 exports.handler = async (event) => {
@@ -39,7 +40,7 @@ exports.handler = async (event) => {
       return jsonResponse(200, await getMePayload(user));
     }
 
-    const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)\/(settings|calendar-connection)$/);
+    const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)\/(settings|calendar-connection|state)$/);
     if (workspaceMatch) {
       const workspaceId = decodeURIComponent(workspaceMatch[1]);
       const resource = workspaceMatch[2];
@@ -50,6 +51,10 @@ exports.handler = async (event) => {
 
       if (resource === "calendar-connection") {
         return await handleCalendarConnection(method, user, workspaceId, event);
+      }
+
+      if (resource === "state") {
+        return await handleWorkspaceState(method, user, workspaceId, event);
       }
     }
 
@@ -114,7 +119,7 @@ async function touchUserRecord(user) {
 }
 
 async function getMePayload(user) {
-  const [userRecord, settingsItems, connectionItems] = await Promise.all([
+  const [userRecord, settingsItems, connectionItems, stateItems] = await Promise.all([
     ddb.send(
       new GetCommand({
         TableName: TABLES.users,
@@ -122,7 +127,8 @@ async function getMePayload(user) {
       })
     ),
     queryByUser(TABLES.workspaceSettings, user.userId),
-    queryByUser(TABLES.calendarConnections, user.userId)
+    queryByUser(TABLES.calendarConnections, user.userId),
+    queryByUser(TABLES.workspaceState, user.userId)
   ]);
 
   return {
@@ -133,7 +139,8 @@ async function getMePayload(user) {
       displayName: user.displayName
     },
     workspaceSettings: settingsItems,
-    calendarConnections: connectionItems
+    calendarConnections: connectionItems,
+    workspaceStates: stateItems
   };
 }
 
@@ -253,6 +260,68 @@ async function handleCalendarConnection(method, user, workspaceId, event) {
   return methodNotAllowed(["GET", "PUT", "POST", "DELETE"]);
 }
 
+async function handleWorkspaceState(method, user, workspaceId, event) {
+  if (method === "GET") {
+    const record = await getItem(TABLES.workspaceState, user.userId, workspaceId);
+    return jsonResponse(200, {
+      ok: true,
+      workspaceId,
+      workspace: record?.workspace || null,
+      state: record?.state || null,
+      updatedAt: record?.updatedAt || null
+    });
+  }
+
+  if (method === "PUT" || method === "POST") {
+    const body = parseJsonBody(event);
+    const nextWorkspace = sanitizeWorkspaceObject(body.workspace);
+    const nextState = sanitizeWorkspaceLocalState(body.state);
+    const now = new Date().toISOString();
+
+    await ddb.send(
+      new PutCommand({
+        TableName: TABLES.workspaceState,
+        Item: {
+          userId: user.userId,
+          workspaceId,
+          workspace: Object.keys(nextWorkspace).length ? nextWorkspace : null,
+          state: Object.keys(nextState).length ? nextState : null,
+          updatedAt: now,
+          createdAt: (await getItem(TABLES.workspaceState, user.userId, workspaceId))?.createdAt || now
+        }
+      })
+    );
+
+    return jsonResponse(200, {
+      ok: true,
+      workspaceId,
+      workspace: Object.keys(nextWorkspace).length ? nextWorkspace : null,
+      state: Object.keys(nextState).length ? nextState : null,
+      updatedAt: now
+    });
+  }
+
+  if (method === "DELETE") {
+    await ddb.send(
+      new DeleteCommand({
+        TableName: TABLES.workspaceState,
+        Key: {
+          userId: user.userId,
+          workspaceId
+        }
+      })
+    );
+
+    return jsonResponse(200, {
+      ok: true,
+      workspaceId,
+      deleted: true
+    });
+  }
+
+  return methodNotAllowed(["GET", "PUT", "POST", "DELETE"]);
+}
+
 async function getItem(tableName, userId, workspaceId) {
   const response = await ddb.send(
     new GetCommand({
@@ -306,6 +375,122 @@ function sanitizeCalendarConnection(body) {
     label: stringValue(body.label),
     sourceWorkspaceId: stringValue(body.sourceWorkspaceId) || null
   };
+}
+
+function sanitizeWorkspaceObject(workspace) {
+  if (!workspace || typeof workspace !== "object") {
+    return {};
+  }
+
+  const next = {};
+  const stringKeys = ["label", "title", "description", "eyebrow", "quote", "captureHint", "scratchpadKey"];
+  for (const key of stringKeys) {
+    if (String(workspace[key] || "").trim()) {
+      next[key] = String(workspace[key]).trim();
+    }
+  }
+
+  if (String(workspace.id || "").trim()) {
+    next.id = String(workspace.id).trim();
+  }
+
+  if (String(workspace.accent || "").trim()) {
+    next.accent = String(workspace.accent).trim();
+  }
+
+  if (String(workspace.accent2 || "").trim()) {
+    next.accent2 = String(workspace.accent2).trim();
+  }
+
+  if (Array.isArray(workspace.stats)) {
+    next.stats = workspace.stats;
+  }
+
+  if (Array.isArray(workspace.schedule)) {
+    next.schedule = workspace.schedule;
+  }
+
+  if (Array.isArray(workspace.kanban)) {
+    next.kanban = workspace.kanban;
+  }
+
+  if (Array.isArray(workspace.calendar)) {
+    next.calendar = workspace.calendar;
+  }
+
+  if (Array.isArray(workspace.goals)) {
+    next.goals = workspace.goals;
+  }
+
+  if (workspace.spotlight && typeof workspace.spotlight === "object") {
+    next.spotlight = workspace.spotlight;
+  }
+
+  if (workspace.todos && typeof workspace.todos === "object") {
+    next.todos = workspace.todos;
+  }
+
+  if (workspace.groceries && typeof workspace.groceries === "object") {
+    next.groceries = workspace.groceries;
+  }
+
+  if (workspace.menuByDay && typeof workspace.menuByDay === "object") {
+    next.menuByDay = workspace.menuByDay;
+  }
+
+  return next;
+}
+
+function sanitizeWorkspaceLocalState(state) {
+  if (!state || typeof state !== "object") {
+    return {};
+  }
+
+  const next = {};
+  const stringKeys = ["scratchpad", "homeMenuDay", "captureMode", "captureFollowSide", "captureAssistant", "selectedScheduleDay"];
+  for (const key of stringKeys) {
+    if (String(state[key] || "").trim()) {
+      next[key] = String(state[key]).trim();
+    }
+  }
+
+  if (typeof state.captureFollow === "boolean") {
+    next.captureFollow = state.captureFollow;
+  }
+
+  if (Array.isArray(state.kanban)) {
+    next.kanban = state.kanban;
+  }
+
+  if (Array.isArray(state.schedule)) {
+    next.schedule = state.schedule;
+  }
+
+  if (Array.isArray(state.flashcards)) {
+    next.flashcards = state.flashcards;
+  }
+
+  if (state.home && typeof state.home === "object") {
+    next.home = state.home;
+  }
+
+  if (Array.isArray(state.hiddenCalendarEvents)) {
+    next.hiddenCalendarEvents = state.hiddenCalendarEvents;
+  }
+
+  if (Array.isArray(state.calendarTodos)) {
+    next.calendarTodos = state.calendarTodos;
+  }
+
+  if (state.homeCalendarConnection && typeof state.homeCalendarConnection === "object") {
+    next.homeCalendarConnection = state.homeCalendarConnection;
+  }
+
+  if (Array.isArray(state.homeCalendarCache)) {
+    next.homeCalendarCache = state.homeCalendarCache;
+  }
+
+  return next;
 }
 
 function stringValue(value) {

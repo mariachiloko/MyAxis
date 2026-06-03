@@ -40,7 +40,8 @@ data "aws_iam_policy_document" "lambda_data" {
     resources = [
       aws_dynamodb_table.users.arn,
       aws_dynamodb_table.workspace_settings.arn,
-      aws_dynamodb_table.calendar_connections.arn
+      aws_dynamodb_table.calendar_connections.arn,
+      aws_dynamodb_table.workspace_state.arn
     ]
   }
 }
@@ -68,6 +69,7 @@ resource "aws_lambda_function" "api" {
       USERS_TABLE                = aws_dynamodb_table.users.name
       WORKSPACE_SETTINGS_TABLE   = aws_dynamodb_table.workspace_settings.name
       CALENDAR_CONNECTIONS_TABLE = aws_dynamodb_table.calendar_connections.name
+      WORKSPACE_STATE_TABLE      = aws_dynamodb_table.workspace_state.name
     }
   }
 }
