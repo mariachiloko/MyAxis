@@ -8,12 +8,14 @@ Link the Home workspace to Google Calendar.
 
 - Reads events from Google Calendar
 - Shows them inside the Home workspace calendar
+- Can read from more than one calendar ID at a time
 - Turns items without a time into to-dos for that day
 
 ## What you need
 
 - A Google OAuth client ID
 - Google Calendar API enabled
+- Calendar IDs you want to follow, separated by commas or new lines
 - A local browser session or a future AWS login flow
 
 ## What to keep private

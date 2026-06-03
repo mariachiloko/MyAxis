@@ -3407,6 +3407,7 @@ async function syncHomeCalendarConnectionToBackend(workspaceId) {
       enabled: Boolean(connection.enabled),
       clientId: connection.clientId,
       calendarId: connection.calendarId || "primary",
+      calendarIds: getHomeCalendarIds(connection),
       label: getWorkspace(workspaceId).label || workspaceId,
       sourceWorkspaceId: workspaceId
     }
@@ -3517,11 +3518,14 @@ function normalizeBackendCalendarConnection(connection) {
     return null;
   }
 
+  const calendarIds = parseCalendarIdList(Array.isArray(connection.calendarIds) ? connection.calendarIds.join(",") : connection.calendarId || "primary");
+
   return {
     provider: connection.provider === "google" ? "google" : "google",
     enabled: Boolean(connection.enabled),
     clientId: String(connection.clientId || "").trim(),
-    calendarId: String(connection.calendarId || "primary").trim() || "primary",
+    calendarId: calendarIds[0] || "primary",
+    calendarIds,
     lastSyncAt: String(connection.lastSyncAt || ""),
     lastError: String(connection.lastError || "")
   };
@@ -3615,6 +3619,9 @@ function applyBackendWorkspaceRecord(record) {
       enabled: Boolean(state.homeCalendarConnection.enabled),
       clientId: String(state.homeCalendarConnection.clientId || "").trim(),
       calendarId: String(state.homeCalendarConnection.calendarId || "primary").trim() || "primary",
+      calendarIds: Array.isArray(state.homeCalendarConnection.calendarIds)
+        ? state.homeCalendarConnection.calendarIds
+        : parseCalendarIdList(state.homeCalendarConnection.calendarId || "primary"),
       lastSyncAt: String(state.homeCalendarConnection.lastSyncAt || ""),
       lastError: String(state.homeCalendarConnection.lastError || "")
     });
@@ -3686,7 +3693,9 @@ function fillHomeCalendarForm(workspaceId) {
     homeCalendarClientIdEl.value = connection.clientId || "";
   }
   if (homeCalendarCalendarIdEl) {
-    homeCalendarCalendarIdEl.value = connection.calendarId || "primary";
+    homeCalendarCalendarIdEl.value = (Array.isArray(connection.calendarIds) && connection.calendarIds.length
+      ? connection.calendarIds
+      : [connection.calendarId || "primary"]).join(", ");
   }
   if (homeCalendarEnabledEl) {
     homeCalendarEnabledEl.checked = Boolean(connection.enabled);
@@ -3733,7 +3742,7 @@ function handleHomeCalendarSubmit(event) {
     provider: "google",
     enabled: Boolean(homeCalendarEnabledEl.checked),
     clientId: String(homeCalendarClientIdEl.value || "").trim(),
-    calendarId: String(homeCalendarCalendarIdEl.value || "primary").trim() || "primary",
+    calendarIds: parseCalendarIdList(homeCalendarCalendarIdEl.value),
     lastSyncAt: getHomeCalendarConnection("home").lastSyncAt || "",
     lastError: getHomeCalendarConnection("home").lastError || ""
   };
@@ -3753,7 +3762,7 @@ function handleHomeCalendarSubmit(event) {
 
 async function handleHomeCalendarSyncClick() {
   const clientId = String(homeCalendarClientIdEl?.value || "").trim();
-  const calendarId = String(homeCalendarCalendarIdEl?.value || "primary").trim() || "primary";
+  const calendarIds = parseCalendarIdList(homeCalendarCalendarIdEl?.value || "primary");
 
   if (!clientId) {
     window.alert("Add your Google OAuth client ID first.");
@@ -3768,7 +3777,7 @@ async function handleHomeCalendarSyncClick() {
     ...getHomeCalendarConnection("home"),
     enabled: true,
     clientId,
-    calendarId
+    calendarIds
   });
   fillHomeCalendarForm("home");
   syncHomeCalendarConnectionToBackend("home").catch((error) => {
@@ -3824,7 +3833,9 @@ async function syncHomeGoogleCalendar(workspaceId, options = {}) {
   try {
     await loadGoogleIdentityScript();
     const token = await getGoogleCalendarAccessToken(connection.clientId, Boolean(options.interactive));
-    const events = await fetchGoogleCalendarEvents(connection.calendarId, token.accessToken, appState.calendarAnchor);
+    const calendarIds = getHomeCalendarIds(connection);
+    const eventBatches = await Promise.all(calendarIds.map((calendarId) => fetchGoogleCalendarEvents(calendarId, token.accessToken, appState.calendarAnchor)));
+    const events = eventBatches.flat();
     saveHomeCalendarCache(workspaceId, events);
     saveHomeCalendarConnection(workspaceId, {
       ...connection,
@@ -3897,6 +3908,20 @@ function loadGoogleIdentityScript() {
 
 function getGoogleCalendarTokenStorageKey(workspaceId) {
   return `${STORAGE_KEYS.calendarConnection}:token:${workspaceId}`;
+}
+
+function parseCalendarIdList(value) {
+  const raw = Array.isArray(value) ? value.join(",") : String(value || "");
+  const list = raw
+    .split(/[,\n]/)
+    .map((item) => String(item || "").trim())
+    .filter((item) => item.length > 0);
+  return list.length ? Array.from(new Set(list)) : ["primary"];
+}
+
+function getHomeCalendarIds(connection) {
+  const calendarIds = parseCalendarIdList(Array.isArray(connection?.calendarIds) ? connection.calendarIds : connection?.calendarId || "primary");
+  return calendarIds.length ? calendarIds : ["primary"];
 }
 
 function getStoredGoogleCalendarToken(workspaceId) {
@@ -3973,10 +3998,10 @@ async function fetchGoogleCalendarEvents(calendarId, accessToken, anchorValue) {
 
   const payload = await response.json();
   const items = Array.isArray(payload.items) ? payload.items : [];
-  return items.map((item) => normalizeGoogleCalendarEvent(item)).filter(Boolean);
+  return items.map((item) => normalizeGoogleCalendarEvent(item, calendarId)).filter(Boolean);
 }
 
-function normalizeGoogleCalendarEvent(event) {
+function normalizeGoogleCalendarEvent(event, calendarId = "primary") {
   const startDateTime = event?.start?.dateTime || null;
   const startDate = event?.start?.date || null;
   const isAllDay = Boolean(startDate && !startDateTime);
@@ -3991,7 +4016,7 @@ function normalizeGoogleCalendarEvent(event) {
     externalId: event.id || "",
     source: "google",
     sourceLabel: "Google",
-    calendarId: event.organizer?.email || "primary",
+    calendarId: String(calendarId || "primary").trim() || "primary",
     day: getDayLabel(date),
     dateKey: formatDateKey(date),
     time: isAllDay ? "" : formatClockTime(date),
@@ -4551,23 +4576,34 @@ function getHomeCalendarConnection(workspaceId) {
       enabled: false,
       clientId: "",
       calendarId: "primary",
+      calendarIds: ["primary"],
       lastSyncAt: "",
       lastError: ""
     };
   }
 
+  const calendarIds = parseCalendarIdList(Array.isArray(stored.calendarIds) ? stored.calendarIds.join(",") : stored.calendarId || "primary");
   return {
     provider: stored.provider === "google" ? "google" : "google",
     enabled: Boolean(stored.enabled),
     clientId: String(stored.clientId || "").trim(),
-    calendarId: String(stored.calendarId || "primary").trim() || "primary",
+    calendarId: calendarIds[0] || "primary",
+    calendarIds,
     lastSyncAt: String(stored.lastSyncAt || ""),
     lastError: String(stored.lastError || "")
   };
 }
 
 function saveHomeCalendarConnection(workspaceId, connection) {
-  localStorage.setItem(getHomeCalendarConnectionStorageKey(workspaceId), JSON.stringify(connection));
+  const calendarIds = parseCalendarIdList(Array.isArray(connection?.calendarIds) ? connection.calendarIds.join(",") : connection?.calendarId || "primary");
+  localStorage.setItem(
+    getHomeCalendarConnectionStorageKey(workspaceId),
+    JSON.stringify({
+      ...connection,
+      calendarId: calendarIds[0] || "primary",
+      calendarIds
+    })
+  );
   scheduleWorkspaceStateSync(workspaceId);
 }
 
@@ -4637,7 +4673,9 @@ function getCalendarEventHideKey(event) {
   }
 
   const source = event.source || "calendar";
-  const stableId = source === "google" && event.externalId ? event.externalId : event.id;
+  const stableId = source === "google"
+    ? [event.calendarId || "primary", event.externalId || event.id].join(":")
+    : event.id;
   return `${source}:${String(stableId || "")}`;
 }
 
@@ -4711,7 +4749,9 @@ function getCalendarTodoKey(event) {
   }
 
   const source = event.source || "calendar";
-  const stableId = source === "google" && event.externalId ? event.externalId : event.id;
+  const stableId = source === "google"
+    ? [event.calendarId || "primary", event.externalId || event.id].join(":")
+    : event.id;
   const dateKey = String(event.dateKey || "").trim();
   return `${source}:${String(stableId || "")}:${dateKey}`;
 }
@@ -5599,6 +5639,9 @@ function applyStateBackup(state) {
             enabled: Boolean(workspaceState.homeCalendarConnection.enabled),
             clientId: String(workspaceState.homeCalendarConnection.clientId || "").trim(),
             calendarId: String(workspaceState.homeCalendarConnection.calendarId || "primary").trim() || "primary",
+            calendarIds: Array.isArray(workspaceState.homeCalendarConnection.calendarIds)
+              ? workspaceState.homeCalendarConnection.calendarIds
+              : parseCalendarIdList(workspaceState.homeCalendarConnection.calendarId || "primary"),
             lastSyncAt: String(workspaceState.homeCalendarConnection.lastSyncAt || ""),
             lastError: String(workspaceState.homeCalendarConnection.lastError || "")
           });

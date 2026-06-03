@@ -19,6 +19,7 @@ A private-safe, Skylight-inspired dashboard for work, projects, study, and home 
 - Week and month calendar views with per-day add buttons and collapsible month cards
 - Study flashcards geared toward project and interview prep
 - Optional Home workspace Google Calendar sync using a Google OAuth client ID and calendar ID you provide locally
+- Home calendar sync can use more than one calendar ID, separated by commas or new lines
 - Optional motivational-quote endpoint for AI-generated quote text, configured locally in `config.local.js`
 - Optional cloud sync settings for the backend API URL, plus Cognito sign-in settings stored locally in the browser or `config.local.js`
 
@@ -36,7 +37,7 @@ Open the static site with a local web server, then edit `config.example.js` and 
 
 - `app.js`, `index.html`, and `styles.css` are the public dashboard shell
 - `infra/` contains the AWS/Terraform scaffold for the serverless deployment path
-- `docs/runbooks/` contains short public runbooks for local use, backend sync, calendar sync, and deploy
+- `docs/runbooks/` contains short public runbooks for local use, backend sync, calendar sync, calendar linking, and deploy
 - `scripts/build.sh` creates a simple static build output in `dist/`
 - `runtime-config.js` is the public-safe runtime config hook that gets populated during build
 - `scripts/package-api.sh` installs the Lambda dependencies before a Terraform apply

@@ -367,14 +367,28 @@ function sanitizeCalendarConnection(body) {
     return {};
   }
 
+  const calendarIds = normalizeCalendarIds(body.calendarIds || body.calendarId);
+
   return {
     provider: String(body.provider || "google").trim() || "google",
     clientId: stringValue(body.clientId),
-    calendarId: stringValue(body.calendarId) || "primary",
+    calendarId: calendarIds[0] || stringValue(body.calendarId) || "primary",
+    calendarIds,
     enabled: Boolean(body.enabled),
     label: stringValue(body.label),
     sourceWorkspaceId: stringValue(body.sourceWorkspaceId) || null
   };
+}
+
+function normalizeCalendarIds(value) {
+  const list = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(/[,\n]/)
+        .map((item) => item.trim());
+
+  const uniqueIds = Array.from(new Set(list.map((item) => String(item || "").trim()).filter(Boolean)));
+  return uniqueIds.length ? uniqueIds : ["primary"];
 }
 
 function sanitizeWorkspaceObject(workspace) {
