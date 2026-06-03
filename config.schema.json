@@ -10,6 +10,18 @@
       "type": "string",
       "description": "Workspace id that should open by default."
     },
+    "aiEndpoint": {
+      "type": "string",
+      "description": "Optional endpoint for motivation quotes and the workspace assistant."
+    },
+    "apiBaseUrl": {
+      "type": "string",
+      "description": "Optional AWS backend base URL for cloud sync."
+    },
+    "apiAccessToken": {
+      "type": "string",
+      "description": "Optional bearer token for authenticated backend requests."
+    },
     "workspaces": {
       "type": "array",
       "minItems": 1,

@@ -18,7 +18,9 @@ const STORAGE_KEYS = {
   calendarConnection: "workspace-dashboard:calendar-connection",
   calendarCache: "workspace-dashboard:calendar-cache",
   hiddenCalendarEvents: "workspace-dashboard:hidden-calendar-events",
-  calendarTodos: "workspace-dashboard:calendar-todos"
+  calendarTodos: "workspace-dashboard:calendar-todos",
+  backendApiBaseUrl: "workspace-dashboard:backend-api-base-url",
+  backendApiToken: "workspace-dashboard:backend-api-token"
 };
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -117,6 +119,13 @@ const flashcardNewEl = document.getElementById("flashcard-new");
 const spotlightTitleEl = document.getElementById("spotlight-title");
 const drawerTitleEl = document.getElementById("drawer-title");
 const drawerWorkspaceSectionEl = document.getElementById("drawer-workspace-section");
+const backendSyncFormEl = document.getElementById("backend-sync-form");
+const backendSyncBaseUrlEl = document.getElementById("backend-sync-base-url");
+const backendSyncTokenEl = document.getElementById("backend-sync-token");
+const backendSyncSaveEl = document.getElementById("backend-sync-save");
+const backendSyncCurrentEl = document.getElementById("backend-sync-current");
+const backendSyncClearEl = document.getElementById("backend-sync-clear");
+const backendSyncStatusEl = document.getElementById("backend-sync-status");
 const homeCalendarSectionEl = document.getElementById("home-calendar-section");
 const drawerTaskSectionEl = document.getElementById("drawer-task-section");
 const drawerScheduleSectionEl = document.getElementById("drawer-schedule-section");
@@ -205,8 +214,12 @@ function bootstrap() {
   wireCalendarControls();
   wireLayoutControls();
   wireBackupControls();
+  wireBackendSyncControls();
   renderWorkspace(getWorkspace(appState.workspaceId));
   refreshMotivationQuote(getWorkspace(appState.workspaceId));
+  hydrateBackendAccountState().catch((error) => {
+    console.warn("Unable to hydrate backend state.", error);
+  });
 }
 
 function renderDate() {
@@ -379,6 +392,17 @@ function wireBackupControls() {
     }
   });
   backupFileEl.addEventListener("change", handleImportFile);
+}
+
+function wireBackendSyncControls() {
+  if (!backendSyncFormEl) {
+    return;
+  }
+
+  backendSyncFormEl.addEventListener("submit", handleBackendSyncSubmit);
+  backendSyncCurrentEl?.addEventListener("click", handleBackendSyncCurrentClick);
+  backendSyncClearEl?.addEventListener("click", handleBackendSyncClearClick);
+  fillBackendSyncForm();
 }
 
 function renderTabs() {
@@ -2648,6 +2672,7 @@ function syncDrawerSelections() {
   }
 
   fillWorkspaceSettingsForm(workspaceSettingsWorkspaceEl.value || appState.workspaceId);
+  fillBackendSyncForm();
   if (appState.drawerMode === "workspace") {
     return;
   }
@@ -2706,6 +2731,312 @@ function fillWorkspaceSettingsForm(workspaceId) {
   workspaceSettingsAccent2El.value = normalizeHexColor(workspace.accent2 || defaultConfig.workspaces[0].accent2);
   workspaceSettingsDefaultEl.value = config.defaultWorkspace || defaultConfig.defaultWorkspace || config.workspaces[0].id;
   syncHomeCalendarSection(workspace);
+}
+
+function getBackendSyncConfig() {
+  return {
+    baseUrl: String(config.apiBaseUrl || localStorage.getItem(STORAGE_KEYS.backendApiBaseUrl) || "").trim().replace(/\/+$/, ""),
+    accessToken: String(config.apiAccessToken || localStorage.getItem(STORAGE_KEYS.backendApiToken) || "").trim()
+  };
+}
+
+function fillBackendSyncForm() {
+  if (!backendSyncFormEl) {
+    return;
+  }
+
+  const backendSync = getBackendSyncConfig();
+  if (backendSyncBaseUrlEl) {
+    backendSyncBaseUrlEl.value = backendSync.baseUrl;
+  }
+  if (backendSyncTokenEl) {
+    backendSyncTokenEl.value = backendSync.accessToken;
+  }
+  if (backendSyncCurrentEl) {
+    backendSyncCurrentEl.disabled = !backendSync.baseUrl || !backendSync.accessToken;
+  }
+  if (backendSyncClearEl) {
+    backendSyncClearEl.disabled = !backendSync.baseUrl && !backendSync.accessToken;
+  }
+  updateBackendSyncStatus();
+}
+
+function updateBackendSyncStatus(message = "") {
+  if (!backendSyncStatusEl) {
+    return;
+  }
+
+  if (message) {
+    backendSyncStatusEl.textContent = message;
+    return;
+  }
+
+  const backendSync = getBackendSyncConfig();
+  backendSyncStatusEl.textContent = backendSync.baseUrl
+    ? backendSync.accessToken
+      ? `Cloud sync ready at ${backendSync.baseUrl}.`
+      : `Cloud sync base URL saved at ${backendSync.baseUrl}, but no access token is set yet.`
+    : "No cloud sync configured yet.";
+}
+
+function persistBackendSyncConfig({ baseUrl = "", accessToken = "" }) {
+  const nextBaseUrl = String(baseUrl || "").trim().replace(/\/+$/, "");
+  const nextAccessToken = String(accessToken || "").trim();
+
+  if (nextBaseUrl) {
+    localStorage.setItem(STORAGE_KEYS.backendApiBaseUrl, nextBaseUrl);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.backendApiBaseUrl);
+  }
+
+  if (nextAccessToken) {
+    localStorage.setItem(STORAGE_KEYS.backendApiToken, nextAccessToken);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.backendApiToken);
+  }
+
+  fillBackendSyncForm();
+}
+
+function handleBackendSyncSubmit(event) {
+  event.preventDefault();
+  persistBackendSyncConfig({
+    baseUrl: backendSyncBaseUrlEl?.value || "",
+    accessToken: backendSyncTokenEl?.value || ""
+  });
+  updateBackendSyncStatus("Cloud sync settings saved locally.");
+}
+
+async function handleBackendSyncCurrentClick() {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl || !backendSync.accessToken) {
+    window.alert("Save your cloud sync settings first.");
+    return;
+  }
+
+  const workspace = getWorkspace(appState.workspaceId);
+  await syncWorkspaceSettingsToBackend(workspace.id);
+  if (workspace.id === "home") {
+    await syncHomeCalendarConnectionToBackend("home");
+  }
+  updateBackendSyncStatus(`Synced ${workspace.label || workspace.id} to cloud.`);
+}
+
+function handleBackendSyncClearClick() {
+  if (!window.confirm("Clear the saved cloud sync URL and token from this browser?")) {
+    return;
+  }
+
+  localStorage.removeItem(STORAGE_KEYS.backendApiBaseUrl);
+  localStorage.removeItem(STORAGE_KEYS.backendApiToken);
+  fillBackendSyncForm();
+}
+
+async function hydrateBackendAccountState() {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl || !backendSync.accessToken) {
+    return null;
+  }
+
+  const payload = await backendRequest("/v1/me");
+  if (!payload || !payload.ok) {
+    return null;
+  }
+
+  let nextDefaultWorkspace = config.defaultWorkspace;
+  let overridesChanged = false;
+
+  if (Array.isArray(payload.workspaceSettings)) {
+    const nextOverrides = readStoredJson(STORAGE_KEYS.uiOverrides, {});
+    const nextWorkspaces = Array.isArray(nextOverrides.workspaces) ? [...nextOverrides.workspaces] : [];
+
+    for (const item of payload.workspaceSettings) {
+      const workspaceId = String(item?.workspaceId || "").trim();
+      if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
+        continue;
+      }
+
+      const settings = normalizeBackendWorkspaceSettings(item.settings);
+      if (!Object.keys(settings).length) {
+        continue;
+      }
+
+      const index = nextWorkspaces.findIndex((workspace) => workspace.id === workspaceId);
+      const nextWorkspace = {
+        ...(index === -1 ? { id: workspaceId } : nextWorkspaces[index]),
+        ...settings,
+        id: workspaceId
+      };
+
+      if (index === -1) {
+        nextWorkspaces.push(nextWorkspace);
+      } else {
+        nextWorkspaces[index] = nextWorkspace;
+      }
+
+      if (settings.defaultWorkspace) {
+        nextDefaultWorkspace = settings.defaultWorkspace;
+      }
+
+      overridesChanged = true;
+    }
+
+    if (overridesChanged) {
+      uiOverrides = {
+        ...nextOverrides,
+        defaultWorkspace: nextDefaultWorkspace,
+        workspaces: nextWorkspaces
+      };
+      persistUiOverrides();
+    }
+  }
+
+  if (Array.isArray(payload.calendarConnections)) {
+    for (const item of payload.calendarConnections) {
+      const workspaceId = String(item?.workspaceId || "").trim();
+      if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
+        continue;
+      }
+
+      const connection = normalizeBackendCalendarConnection(item.connection);
+      if (connection) {
+        saveHomeCalendarConnection(workspaceId, connection);
+      }
+    }
+  }
+
+  if (overridesChanged) {
+    config = mergeDashboardConfig(defaultConfig, importedConfig, localConfig, uiOverrides);
+    populateEditorSelects();
+  }
+
+  fillBackendSyncForm();
+  renderTabs();
+  renderWorkspace(getWorkspace(appState.workspaceId));
+  updateBackendSyncStatus("Cloud sync loaded from your account.");
+  return payload;
+}
+
+async function syncWorkspaceSettingsToBackend(workspaceId) {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl || !backendSync.accessToken) {
+    return null;
+  }
+
+  const workspace = getWorkspace(workspaceId);
+  const payload = {
+    label: workspace.label || "",
+    title: workspace.title || "",
+    description: workspace.description || "",
+    accent: workspace.accent || "",
+    accent2: workspace.accent2 || "",
+    defaultWorkspace: config.defaultWorkspace || ""
+  };
+
+  return backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/settings`, {
+    method: "PUT",
+    body: payload
+  });
+}
+
+async function syncHomeCalendarConnectionToBackend(workspaceId) {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl || !backendSync.accessToken) {
+    return null;
+  }
+
+  const connection = getHomeCalendarConnection(workspaceId);
+  if (!connection.enabled || !connection.clientId) {
+    return backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/calendar-connection`, {
+      method: "DELETE"
+    }).catch(() => null);
+  }
+
+  return backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/calendar-connection`, {
+    method: "PUT",
+    body: {
+      provider: connection.provider || "google",
+      enabled: Boolean(connection.enabled),
+      clientId: connection.clientId,
+      calendarId: connection.calendarId || "primary",
+      label: getWorkspace(workspaceId).label || workspaceId,
+      sourceWorkspaceId: workspaceId
+    }
+  });
+}
+
+async function backendRequest(path, options = {}) {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl || !backendSync.accessToken) {
+    return null;
+  }
+
+  const response = await fetch(new URL(path, backendSync.baseUrl).toString(), {
+    method: options.method || "GET",
+    headers: {
+      Authorization: `Bearer ${backendSync.accessToken}`,
+      ...(options.body ? { "content-type": "application/json" } : {}),
+      ...(options.headers || {})
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload?.error || `Backend request failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
+function normalizeBackendWorkspaceSettings(settings) {
+  if (!settings || typeof settings !== "object") {
+    return {};
+  }
+
+  const normalized = {};
+
+  if (String(settings.label || "").trim()) {
+    normalized.label = String(settings.label).trim();
+  }
+
+  if (String(settings.title || "").trim()) {
+    normalized.title = String(settings.title).trim();
+  }
+
+  if (String(settings.description || "").trim()) {
+    normalized.description = String(settings.description).trim();
+  }
+
+  if (String(settings.accent || "").trim()) {
+    normalized.accent = normalizeHexColor(settings.accent);
+  }
+
+  if (String(settings.accent2 || "").trim()) {
+    normalized.accent2 = normalizeHexColor(settings.accent2);
+  }
+
+  if (String(settings.defaultWorkspace || "").trim()) {
+    normalized.defaultWorkspace = String(settings.defaultWorkspace).trim();
+  }
+
+  return normalized;
+}
+
+function normalizeBackendCalendarConnection(connection) {
+  if (!connection || typeof connection !== "object") {
+    return null;
+  }
+
+  return {
+    provider: connection.provider === "google" ? "google" : "google",
+    enabled: Boolean(connection.enabled),
+    clientId: String(connection.clientId || "").trim(),
+    calendarId: String(connection.calendarId || "primary").trim() || "primary",
+    lastSyncAt: String(connection.lastSyncAt || ""),
+    lastError: String(connection.lastError || "")
+  };
 }
 
 function syncHomeCalendarSection(workspaceOrId) {
@@ -2788,6 +3119,10 @@ function handleHomeCalendarSubmit(event) {
 
   saveHomeCalendarConnection("home", connection);
   fillHomeCalendarForm("home");
+  syncHomeCalendarConnectionToBackend("home").catch((error) => {
+    console.warn("Unable to sync calendar connection to backend.", error);
+    updateBackendSyncStatus("Saved locally. Backend sync needs attention.");
+  });
 }
 
 async function handleHomeCalendarSyncClick() {
@@ -2810,12 +3145,18 @@ async function handleHomeCalendarSyncClick() {
     calendarId
   });
   fillHomeCalendarForm("home");
+  syncHomeCalendarConnectionToBackend("home").catch((error) => {
+    console.warn("Unable to sync calendar connection to backend.", error);
+  });
   await syncHomeGoogleCalendar("home", { interactive: true });
 }
 
 function disconnectHomeGoogleCalendar() {
   clearHomeCalendarConnection("home");
   fillHomeCalendarForm("home");
+  syncHomeCalendarConnectionToBackend("home").catch((error) => {
+    console.warn("Unable to delete calendar connection from backend.", error);
+  });
   renderWorkspace(getWorkspace(appState.workspaceId));
 }
 
@@ -2864,6 +3205,9 @@ async function syncHomeGoogleCalendar(workspaceId, options = {}) {
       lastSyncAt: new Date().toISOString(),
       lastError: ""
     });
+    syncHomeCalendarConnectionToBackend(workspaceId).catch((error) => {
+      console.warn("Unable to sync calendar connection to backend.", error);
+    });
     if (workspaceId === appState.workspaceId) {
       renderWorkspace(getWorkspace(appState.workspaceId));
     } else {
@@ -2875,6 +3219,9 @@ async function syncHomeGoogleCalendar(workspaceId, options = {}) {
     saveHomeCalendarConnection(workspaceId, {
       ...connection,
       lastError: message
+    });
+    syncHomeCalendarConnectionToBackend(workspaceId).catch((syncError) => {
+      console.warn("Unable to sync calendar connection error state to backend.", syncError);
     });
     updateHomeCalendarStatus(workspaceId, `Sync failed: ${message}`);
     if (options.interactive) {
@@ -4374,6 +4721,10 @@ function handleWorkspaceSettingsSubmit(event) {
   populateEditorSelects();
   renderTabs();
   renderWorkspace(getWorkspace(appState.workspaceId));
+  syncWorkspaceSettingsToBackend(workspaceId).catch((error) => {
+    console.warn("Unable to sync workspace settings to backend.", error);
+    updateBackendSyncStatus("Saved locally. Backend sync needs attention.");
+  });
 }
 
 function resetWorkspaceOverrides() {
@@ -4388,6 +4739,7 @@ function resetWorkspaceOverrides() {
   renderTabs();
   renderWorkspace(getWorkspace(appState.workspaceId));
   fillWorkspaceSettingsForm(appState.workspaceId);
+  fillBackendSyncForm();
 }
 
 function setWorkspaceOverride(workspaceId, patch) {
@@ -4919,14 +5271,23 @@ function mergeDashboardConfig(base, ...overrides) {
     ...base,
     workspaces: [...base.workspaces]
   };
+  const topLevelKeys = [
+    "defaultWorkspace",
+    "aiEndpoint",
+    "motivationQuoteEndpoint",
+    "apiBaseUrl",
+    "apiAccessToken"
+  ];
 
   for (const override of overrides) {
     if (!override || typeof override !== "object") {
       continue;
     }
 
-    if (override.defaultWorkspace) {
-      merged.defaultWorkspace = override.defaultWorkspace;
+    for (const key of topLevelKeys) {
+      if (typeof override[key] === "string" && override[key].trim()) {
+        merged[key] = override[key];
+      }
     }
 
     if (!Array.isArray(override.workspaces)) {

@@ -14,12 +14,13 @@ A private-safe, Skylight-inspired dashboard for work, projects, study, and home 
 - Drag-and-drop widget layout with resizable panels
 - Local backup export and import
 - A reusable config schema for custom workspaces
-- A private settings drawer for workspace styling only
+- A private settings drawer for workspace styling and cloud sync
 - Task, calendar, and flashcard editors that persist locally
 - Week and month calendar views with per-day add buttons and collapsible month cards
 - Study flashcards geared toward project and interview prep
 - Optional Home workspace Google Calendar sync using a Google OAuth client ID and calendar ID you provide locally
 - Optional motivational-quote endpoint for AI-generated quote text, configured locally in `config.local.js`
+- Optional cloud sync settings for the backend API URL and access token, stored locally in the browser or `config.local.js`
 
 ## Privacy rules
 
@@ -48,6 +49,7 @@ Open the static site with a local web server, then edit `config.example.js` and 
 - Local UI overrides are stored in browser storage, not GitHub
 - Kanban columns are meant to read like `To-do`, `In progress`, and `Done`
 - If you set `aiEndpoint`, the dashboard will POST workspace context to that endpoint and use the returned `quote` field for motivation text or `text`/`message` for assistant replies when available
+- If you set `apiBaseUrl` and `apiAccessToken`, the dashboard can sync workspace settings and Home calendar connections to the AWS backend
 - Home calendar sync settings live locally and are not part of the public repo
 
 ## Privacy rules for backups
@@ -80,3 +82,4 @@ The current version is focused on a clean, modular dashboard shell with local-fi
 - `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/settings`
 - `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/calendar-connection`
 - The API expects a Cognito JWT on authenticated routes
+- The Settings drawer includes a private `Cloud sync` section for the API base URL and access token until the Cognito login flow is fully wired in

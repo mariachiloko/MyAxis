@@ -187,6 +187,29 @@
           </div>
         </form>
 
+        <div class="drawer-subsection">
+          <div class="drawer-section-header">
+            <h4>Cloud sync</h4>
+            <span class="panel-hint">Account-level backend</span>
+          </div>
+          <form class="drawer-form" id="backend-sync-form">
+            <label>
+              API base URL
+              <input id="backend-sync-base-url" type="url" placeholder="https://api.example.com" />
+            </label>
+            <label>
+              Access token
+              <input id="backend-sync-token" type="password" placeholder="Bearer token" />
+            </label>
+            <div class="drawer-actions">
+              <button class="button button-primary" id="backend-sync-save" type="submit">Save cloud settings</button>
+              <button class="button" id="backend-sync-current" type="button">Sync current workspace</button>
+              <button class="button button-danger" id="backend-sync-clear" type="button">Clear</button>
+            </div>
+          </form>
+          <p class="panel-hint" id="backend-sync-status">No cloud sync configured yet.</p>
+        </div>
+
         <div class="drawer-subsection hidden" id="home-calendar-section">
           <div class="drawer-section-header">
             <h4>Home calendar</h4>
