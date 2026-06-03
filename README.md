@@ -1,0 +1,53 @@
+# MyAxis
+
+A private-safe, Skylight-inspired dashboard for work, projects, study, and home planning.
+
+## What this is
+
+- Workspace switching for different contexts
+- Kanban, calendar, todo, goals, and study widgets
+- Widget-specific edit windows instead of one giant settings panel
+- Fixed motivation note that changes on each load
+- A local-only scratchpad for notes
+- Public-safe sample data with private overrides kept out of Git
+- Drag-and-drop kanban cards
+- Drag-and-drop widget layout with resizable panels
+- Local backup export and import
+- A reusable config schema for custom workspaces
+- A private settings drawer for workspace styling only
+- Task, calendar, and flashcard editors that persist locally
+- Week and month calendar views with per-day add buttons and collapsible month cards
+- Study flashcards geared toward project and interview prep
+- Optional Home workspace Google Calendar sync using a Google OAuth client ID and calendar ID you provide locally
+- Optional motivational-quote endpoint for AI-generated quote text, configured locally in `config.local.js`
+
+## Privacy rules
+
+- Do not commit personal calendars, credentials, API keys, or private notes
+- Keep local overrides in `config.local.js`
+- Keep personal content in ignored paths only
+
+## Local use
+
+Open the static site with a local web server, then edit `config.example.js` and optionally add a `config.local.js` file for your private setup.
+
+## Customization
+
+- `config.example.js` is the public-safe starter config
+- `config.local.js` is the private override file and is ignored by Git
+- `config.schema.json` documents the expected shape of each workspace
+- Imported JSON backups store local dashboard state in your browser
+- Local UI overrides are stored in browser storage, not GitHub
+- Kanban columns are meant to read like `To-do`, `In progress`, and `Done`
+- If you set `aiEndpoint`, the dashboard will POST workspace context to that endpoint and use the returned `quote` field for motivation text or `text`/`message` for assistant replies when available
+- Home calendar sync settings live locally and are not part of the public repo
+
+## Privacy rules for backups
+
+- Backups may contain private scratchpad text and workspace state
+- Keep backup files local
+- Do not commit imported backups or private config files
+
+## Current state
+
+The current version is focused on a clean, modular dashboard shell with local-first state management, plus optional Home workspace Google Calendar sync. The next step is adding a Terraform/AWS deploy path for the public starter while keeping your private setup local only.

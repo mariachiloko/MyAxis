@@ -1,0 +1,1826 @@
+:root {
+  --bg: #0b1020;
+  --bg-2: #11172c;
+  --bg-glow: rgba(105, 140, 255, 0.18);
+  --panel: rgba(10, 16, 33, 0.74);
+  --panel-strong: rgba(16, 24, 46, 0.92);
+  --surface: rgba(7, 12, 24, 0.55);
+  --surface-soft: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #eaf0ff;
+  --text-strong: #f8fbff;
+  --muted: rgba(234, 240, 255, 0.72);
+  --muted-strong: rgba(234, 240, 255, 0.88);
+  --soft: rgba(234, 240, 255, 0.10);
+  --accent: #7dd3fc;
+  --accent-2: #a78bfa;
+  --accent-3: #34d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
+  --success: #34d399;
+  --calendar-work: rgba(125, 211, 252, 0.18);
+  --calendar-focus: rgba(52, 211, 153, 0.18);
+  --calendar-career: rgba(167, 139, 250, 0.18);
+  --calendar-admin: rgba(251, 191, 36, 0.18);
+  --calendar-review: rgba(251, 113, 133, 0.18);
+  --calendar-home: rgba(96, 165, 250, 0.18);
+  --calendar-study: rgba(240, 171, 252, 0.18);
+  --calendar-lab: rgba(74, 222, 128, 0.18);
+  --calendar-errand: rgba(245, 158, 11, 0.18);
+  --calendar-family: rgba(129, 140, 248, 0.18);
+  --radius: 24px;
+  --shadow: 0 24px 90px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f7fb;
+  --bg-2: #ffffff;
+  --bg-glow: rgba(59, 130, 246, 0.10);
+  --panel: rgba(255, 255, 255, 0.88);
+  --panel-strong: rgba(255, 255, 255, 0.98);
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-soft: rgba(15, 23, 42, 0.04);
+  --border: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.14);
+  --text: #0f172a;
+  --text-strong: #020617;
+  --muted: rgba(15, 23, 42, 0.68);
+  --muted-strong: rgba(15, 23, 42, 0.88);
+  --soft: rgba(15, 23, 42, 0.08);
+  --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+  --calendar-work: rgba(59, 130, 246, 0.12);
+  --calendar-focus: rgba(16, 185, 129, 0.12);
+  --calendar-career: rgba(139, 92, 246, 0.12);
+  --calendar-admin: rgba(245, 158, 11, 0.12);
+  --calendar-review: rgba(244, 63, 94, 0.12);
+  --calendar-home: rgba(37, 99, 235, 0.12);
+  --calendar-study: rgba(192, 132, 252, 0.12);
+  --calendar-lab: rgba(34, 197, 94, 0.12);
+  --calendar-errand: rgba(234, 88, 12, 0.12);
+  --calendar-family: rgba(99, 102, 241, 0.12);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, var(--bg-glow), transparent 28%),
+    radial-gradient(circle at right top, rgba(168, 85, 247, 0.12), transparent 24%),
+    linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 100%);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+body {
+  padding: 28px;
+  padding-top: 28px;
+}
+
+::selection {
+  background: rgba(125, 211, 252, 0.28);
+}
+
+.shell {
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+.motivation-light {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  width: min(260px, 100%);
+  min-height: 124px;
+  margin: 6px 0 0 auto;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--border));
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--accent) 18%, transparent), color-mix(in oklab, var(--accent-2) 12%, transparent)),
+    linear-gradient(180deg, var(--panel-strong), var(--surface));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 14px 36px rgba(0, 0, 0, 0.22),
+    0 0 24px color-mix(in oklab, var(--accent) 38%, transparent);
+  overflow: hidden;
+  justify-items: center;
+  text-align: center;
+}
+
+.hero-meta .motivation-light {
+  align-self: flex-start;
+}
+
+.motivation-light::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at left center, color-mix(in oklab, var(--accent) 42%, transparent), transparent 52%),
+    radial-gradient(circle at right center, color-mix(in oklab, var(--accent-2) 28%, transparent), transparent 56%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.motivation-light::after {
+  content: "";
+  position: absolute;
+  inset: auto 18px 10px 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 72%, white), transparent);
+  opacity: 0.9;
+}
+
+.motivation-light strong {
+  position: relative;
+  z-index: 1;
+  color: var(--text-strong);
+  font-size: 1.02rem;
+  line-height: 1.4;
+  font-weight: 700;
+  display: block;
+}
+
+@media (max-width: 780px) {
+  .motivation-light {
+    width: 100%;
+    min-height: 0;
+    margin: 0 0 16px;
+  }
+}
+
+.hero {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.eyebrow,
+.section-label,
+.panel-hint,
+.capture-label {
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.76rem;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.4rem, 5vw, 5rem);
+  line-height: 0.96;
+  margin-top: 8px;
+}
+
+.lede,
+.panel-description {
+  margin-top: 12px;
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.pill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: var(--surface-soft);
+  backdrop-filter: blur(16px);
+  font-size: 0.95rem;
+}
+
+.pill-muted {
+  color: var(--muted);
+}
+
+.button-compact {
+  padding: 10px 12px;
+  border-radius: 999px;
+  min-height: 42px;
+}
+
+.backup-menu {
+  position: relative;
+}
+
+.backup-menu > summary {
+  list-style: none;
+}
+
+.backup-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.backup-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.backup-menu-caret {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.backup-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 8;
+  display: grid;
+  gap: 6px;
+  min-width: 138px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.backup-menu[open] .backup-menu-trigger {
+  border-color: color-mix(in oklab, var(--accent) 56%, white 10%);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 24%, transparent), color-mix(in oklab, var(--accent-2) 18%, transparent));
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  position: relative;
+}
+
+.motivation-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  position: relative;
+}
+
+.theme-toggle-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.motivation-toggle-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  line-height: 1;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.theme-toggle-icon--sun {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.theme-toggle-icon--moon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+:root[data-theme="light"] .theme-toggle-icon--sun {
+  opacity: 1;
+  transform: scale(1);
+}
+
+:root[data-theme="light"] .theme-toggle-icon--moon {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.motivation-toggle-icon--show {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.motivation-toggle-icon--hide {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.motivation-toggle[aria-pressed="true"] .motivation-toggle-icon--show {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.motivation-toggle[aria-pressed="true"] .motivation-toggle-icon--hide {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.motivation-light.is-hidden {
+  display: none;
+}
+
+.workspace-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0 22px;
+}
+
+.workspace-tab {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 12px 16px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.workspace-tab:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+}
+
+.workspace-tab[aria-pressed="true"] {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--accent) 72%, white 10%);
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--accent) 24%, transparent), color-mix(in oklab, var(--accent-2) 18%, transparent));
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.panel {
+  grid-column: span 4;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  background: linear-gradient(180deg, var(--surface), var(--surface-soft));
+  backdrop-filter: blur(24px);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.panel.span-4 {
+  grid-column: span 4;
+}
+
+.panel.span-6 {
+  grid-column: span 6;
+}
+
+.panel.span-8 {
+  grid-column: span 8;
+}
+
+.panel.span-12 {
+  grid-column: span 12;
+}
+
+.widget-panel {
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.widget-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: color-mix(in oklab, var(--widget-accent, var(--accent)) 72%, transparent);
+}
+
+.widget-panel[data-widget-id="hero"] {
+  --widget-accent: var(--accent);
+}
+
+.widget-panel[data-widget-id="schedule"] {
+  --widget-accent: #7dd3fc;
+}
+
+.widget-panel[data-widget-id="calendar"] {
+  --widget-accent: #a78bfa;
+}
+
+.widget-panel[data-widget-id="kanban"] {
+  --widget-accent: #34d399;
+}
+
+.widget-panel[data-widget-id="spotlight"] {
+  --widget-accent: #fbbf24;
+}
+
+.widget-panel[data-widget-id="capture"] {
+  --widget-accent: #60a5fa;
+  min-width: 0;
+}
+
+.widget-panel.is-move-source {
+  cursor: default;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--accent) 48%, transparent) inset,
+    0 0 0 2px color-mix(in oklab, var(--accent-2) 18%, transparent);
+}
+
+.layout.is-move-mode .widget-panel {
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+
+.widget-move-rail {
+  position: absolute;
+  inset: 50% 10px auto;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.widget-move-arrow {
+  pointer-events: auto;
+  min-width: 118px;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+  transition: opacity 140ms ease, transform 140ms ease;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+.layout.is-move-mode .widget-panel:not(.is-move-source) .widget-move-arrow {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.layout.is-move-mode .widget-panel:not(.is-move-source) {
+  outline: 1px dashed color-mix(in oklab, var(--accent) 34%, transparent);
+  outline-offset: -8px;
+}
+
+.widget-panel.is-move-source::after {
+  content: "Moving";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border));
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface-soft));
+  color: var(--text);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.panel-wide {
+  grid-column: span 8;
+}
+
+.panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.calendar-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.schedule-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin: -2px 0 12px;
+  flex-wrap: wrap;
+}
+
+.calendar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.calendar-view-toggle {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.calendar-view-toggle .button {
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.button[aria-pressed="true"] {
+  border-color: color-mix(in oklab, var(--accent) 68%, white 10%);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 18%, transparent), color-mix(in oklab, var(--accent-2) 14%, transparent));
+}
+
+.stack-list,
+.calendar-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-list {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-group {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-group-title {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.stack-item,
+.kanban-column,
+.spotlight-card,
+.capture-shell,
+.calendar-day {
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.stack-item {
+  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.stack-item--schedule {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent-3) 12%, var(--surface)), var(--surface));
+}
+
+.stack-item--calendar {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent) 10%, var(--surface)), var(--surface));
+}
+
+.stack-item--todo {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent-3) 10%, var(--surface)), var(--surface));
+}
+
+.stack-item--todo.is-complete {
+  opacity: 0.78;
+}
+
+.stack-item--todo.is-complete .stack-title,
+.stack-item--todo.is-complete .stack-detail {
+  text-decoration: line-through;
+}
+
+.stack-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.time-chip,
+.tag-chip {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.time-chip--todo,
+.calendar-event-time--todo {
+  color: color-mix(in oklab, var(--accent-3) 72%, var(--text));
+}
+
+.time-chip--todo {
+  align-self: start;
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent-3) 14%, var(--surface-soft));
+  border: 1px solid color-mix(in oklab, var(--accent-3) 24%, var(--border));
+}
+
+.stack-title {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.stack-detail,
+.spotlight-answer,
+.capture-hint {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kanban.home-view {
+  display: block;
+}
+
+.home-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.home-card {
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 16px;
+  min-width: 0;
+}
+
+.home-card--menu {
+  grid-column: 1 / -1;
+}
+
+.home-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.home-day-switcher {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.home-list {
+  display: grid;
+  gap: 8px;
+}
+
+.home-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.home-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.home-item.is-done span {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.home-menu {
+  display: grid;
+  gap: 10px;
+}
+
+.home-menu-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.home-menu-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home-menu-field {
+  display: grid;
+  gap: 6px;
+}
+
+.home-menu-field span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.home-menu-field input,
+.home-menu-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+}
+
+.home-menu-field textarea {
+  resize: vertical;
+  min-height: 76px;
+}
+
+.home-menu-field input:focus,
+.home-menu-field textarea:focus {
+  outline: 2px solid color-mix(in oklab, var(--accent) 46%, white 10%);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .home-board {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kanban-column {
+  padding: 14px;
+}
+
+.column-title {
+  margin-bottom: 12px;
+  font-size: 0.96rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kanban-card {
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.kanban-card--subtasks {
+  gap: 10px;
+}
+
+.kanban-card--ready {
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border));
+}
+
+.kanban-card:last-child {
+  margin-bottom: 0;
+}
+
+.kanban-card strong {
+  font-size: 0.98rem;
+}
+
+.kanban-card[draggable="true"] {
+  cursor: grab;
+}
+
+.kanban-card.is-dragging {
+  opacity: 0.55;
+}
+
+.kanban-column.is-drop-target {
+  outline: 2px dashed color-mix(in oklab, var(--accent) 50%, white 8%);
+  outline-offset: 2px;
+}
+
+.widget-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.widget-panel.is-dragging {
+  opacity: 0.5;
+}
+
+.widget-panel.is-drop-target {
+  outline: 2px solid color-mix(in oklab, var(--widget-accent, var(--accent)) 55%, white 8%);
+  outline-offset: 2px;
+}
+
+.widget-panel:active {
+  cursor: grabbing;
+}
+
+.calendar-grid {
+  gap: 12px;
+}
+
+.calendar-grid--month {
+  grid-template-columns: repeat(7, minmax(128px, 1fr));
+  min-width: 980px;
+}
+
+.calendar-grid--week {
+  grid-template-columns: repeat(7, minmax(160px, 1fr));
+  min-width: 1140px;
+}
+
+.calendar-shell {
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x proximity;
+}
+
+.calendar-day {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  min-height: 320px;
+  align-content: start;
+  scroll-snap-align: start;
+}
+
+.calendar-day--month {
+  min-height: 210px;
+  padding: 12px;
+}
+
+.calendar-grid--week .calendar-day {
+  min-height: 360px;
+}
+
+.calendar-day--blank {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+}
+
+.calendar-day--today {
+  border-color: color-mix(in oklab, var(--widget-accent, var(--accent)) 62%, white 8%);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--widget-accent, var(--accent)) 18%, transparent);
+}
+
+.calendar-day--muted {
+  opacity: 0.6;
+}
+
+.calendar-day-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.calendar-day header {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-day-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.calendar-day-number {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.calendar-event {
+  padding: 10px 12px 12px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  display: grid;
+  gap: 6px;
+  border-left-width: 5px;
+}
+
+.calendar-event-time {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.calendar-event strong {
+  font-size: 0.95rem;
+}
+
+.calendar-event p {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.42;
+}
+
+.calendar-event-actions,
+.kanban-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kanban-subtasks {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--surface) 60%, var(--surface-soft));
+  border: 1px solid var(--border);
+}
+
+.kanban-subtasks summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+}
+
+.kanban-subtasks summary::-webkit-details-marker {
+  display: none;
+}
+
+.kanban-subtasks-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.kanban-subtasks-list {
+  display: grid;
+  gap: 8px;
+}
+
+.kanban-subtask-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  border: 1px solid transparent;
+}
+
+.kanban-subtask-item input {
+  accent-color: var(--accent);
+}
+
+.kanban-subtask-item.is-done span {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.calendar-event--collapsed {
+  gap: 4px;
+}
+
+.calendar-event--collapsed .calendar-event-body {
+  display: none;
+}
+
+.calendar-event-body {
+  display: grid;
+  gap: 6px;
+}
+
+.calendar-day--month .calendar-event {
+  padding: 8px 10px 10px;
+  gap: 4px;
+}
+
+.calendar-day--month .calendar-event strong {
+  font-size: 0.88rem;
+}
+
+.calendar-day--month .calendar-event p {
+  font-size: 0.8rem;
+}
+
+.calendar-empty,
+.calendar-more {
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 4px 2px;
+}
+
+.calendar-more {
+  font-weight: 600;
+}
+
+.calendar-event--calendar {
+  border-left-color: color-mix(in oklab, var(--accent) 55%, white 10%);
+}
+
+.mini-button {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+.calendar-event,
+.calendar-event strong,
+.calendar-event-time,
+.calendar-event p,
+.calendar-event .tag-chip {
+  color: var(--text);
+}
+
+.calendar-event p,
+.calendar-event-time {
+  color: var(--muted-strong);
+}
+
+.calendar-event--work {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-work) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-work) 85%, white 5%);
+}
+
+.calendar-event--focus {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-focus) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-focus) 85%, white 5%);
+}
+
+.calendar-event--career {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-career) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-career) 85%, white 5%);
+}
+
+.calendar-event--admin {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-admin) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-admin) 85%, white 5%);
+}
+
+.calendar-event--review {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-review) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-review) 85%, white 5%);
+}
+
+.calendar-event--home {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-home) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-home) 85%, white 5%);
+}
+
+.calendar-event--study {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-study) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-study) 85%, white 5%);
+}
+
+.calendar-event--lab {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-lab) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-lab) 85%, white 5%);
+}
+
+.calendar-event--errand {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-errand) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-errand) 85%, white 5%);
+}
+
+.calendar-event--family {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-family) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-family) 85%, white 5%);
+}
+
+.calendar-event--practice {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-study) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-study) 85%, white 5%);
+}
+
+.calendar-event--build {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-focus) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-focus) 85%, white 5%);
+}
+
+.calendar-event--docs {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-admin) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-admin) 85%, white 5%);
+}
+
+.calendar-event--ops {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-review) 70%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-review) 85%, white 5%);
+}
+
+.calendar-event--google {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--calendar-career) 60%, transparent), var(--surface));
+  border-left-color: color-mix(in oklab, var(--calendar-career) 88%, white 5%);
+}
+
+.tag-chip--work { background: color-mix(in oklab, var(--calendar-work) 40%, var(--surface-soft)); }
+.tag-chip--focus { background: color-mix(in oklab, var(--calendar-focus) 40%, var(--surface-soft)); }
+.tag-chip--career { background: color-mix(in oklab, var(--calendar-career) 40%, var(--surface-soft)); }
+.tag-chip--admin { background: color-mix(in oklab, var(--calendar-admin) 40%, var(--surface-soft)); }
+.tag-chip--review { background: color-mix(in oklab, var(--calendar-review) 40%, var(--surface-soft)); }
+.tag-chip--home { background: color-mix(in oklab, var(--calendar-home) 40%, var(--surface-soft)); }
+.tag-chip--study { background: color-mix(in oklab, var(--calendar-study) 40%, var(--surface-soft)); }
+.tag-chip--story { background: color-mix(in oklab, var(--calendar-focus) 32%, var(--surface-soft)); }
+.tag-chip--lab { background: color-mix(in oklab, var(--calendar-lab) 40%, var(--surface-soft)); }
+.tag-chip--errand { background: color-mix(in oklab, var(--calendar-errand) 40%, var(--surface-soft)); }
+.tag-chip--family { background: color-mix(in oklab, var(--calendar-family) 40%, var(--surface-soft)); }
+.tag-chip--practice { background: color-mix(in oklab, var(--calendar-study) 40%, var(--surface-soft)); }
+.tag-chip--schedule { background: color-mix(in oklab, var(--calendar-lab) 40%, var(--surface-soft)); }
+.tag-chip--build { background: color-mix(in oklab, var(--calendar-focus) 40%, var(--surface-soft)); }
+.tag-chip--docs { background: color-mix(in oklab, var(--calendar-admin) 40%, var(--surface-soft)); }
+.tag-chip--ops { background: color-mix(in oklab, var(--calendar-review) 40%, var(--surface-soft)); }
+.tag-chip--calendar { background: color-mix(in oklab, var(--soft) 40%, var(--surface-soft)); }
+.tag-chip--interview { background: color-mix(in oklab, var(--calendar-career) 40%, var(--surface-soft)); }
+.tag-chip--google { background: color-mix(in oklab, var(--calendar-career) 40%, var(--surface-soft)); }
+
+.tag-chip {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--surface-soft);
+}
+
+.spotlight {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  gap: 14px;
+}
+
+.spotlight--single {
+  grid-template-columns: 1fr;
+}
+
+.drawer-subsection {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.drawer-subsection .drawer-section-header {
+  margin-bottom: 0;
+}
+
+.task-subtasks {
+  display: grid;
+  gap: 8px;
+}
+
+.task-subtask-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-subtask-check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.task-subtask-input {
+  min-width: 0;
+}
+
+.spotlight-card {
+  padding: 18px;
+}
+
+.spotlight-card--accent {
+  background:
+    linear-gradient(145deg, color-mix(in oklab, var(--accent) 16%, var(--surface)), var(--surface-soft));
+}
+
+.spotlight-title {
+  font-size: 1.15rem;
+  margin-bottom: 10px;
+}
+
+.flashcard {
+  display: grid;
+  gap: 12px;
+}
+
+.flashcard-question {
+  cursor: pointer;
+  user-select: none;
+  font-size: 1.2rem;
+  line-height: 1.5;
+}
+
+.flashcard-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  font: inherit;
+}
+
+.button {
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface-soft);
+  padding: 10px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 30%, rgba(255, 255, 255, 0.08)), color-mix(in oklab, var(--accent-2) 26%, rgba(255, 255, 255, 0.08)));
+}
+
+.button.is-active,
+.button[aria-pressed="true"] {
+  border-color: color-mix(in oklab, var(--accent) 56%, white 10%);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 24%, transparent), color-mix(in oklab, var(--accent-2) 18%, transparent));
+}
+
+.button-danger {
+  color: #ffd6de;
+  border-color: rgba(251, 113, 133, 0.35);
+  background: rgba(251, 113, 133, 0.12);
+}
+
+.button-danger:hover,
+.button-danger:focus-visible {
+  border-color: rgba(251, 113, 133, 0.6);
+}
+
+.flashcard-answer {
+  display: none;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.flashcard-answer.is-visible {
+  display: block;
+}
+
+.capture-label {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.capture-follow-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.button-follow {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  aspect-ratio: 1;
+  color: var(--text-strong);
+  border-color: color-mix(in oklab, var(--accent) 70%, var(--border));
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent) 44%, rgba(255,255,255,0.08)), color-mix(in oklab, var(--accent-2) 22%, rgba(255,255,255,0.08)));
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 10px 24px rgba(0,0,0,0.14);
+  font-weight: 700;
+}
+
+.button-follow-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.button-follow.is-active {
+  border-color: color-mix(in oklab, var(--accent-2) 72%, white 8%);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent-2) 48%, rgba(255,255,255,0.08)), color-mix(in oklab, var(--accent) 18%, rgba(255,255,255,0.08)));
+}
+
+.button-follow-side {
+  color: var(--muted-strong);
+  border-color: var(--border);
+  background: var(--surface-soft);
+}
+
+.button-follow-side.is-active {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--accent) 48%, white 10%);
+  background: color-mix(in oklab, var(--accent) 12%, var(--surface-soft));
+}
+
+.capture-follow-side {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.capture-follow-side.is-disabled {
+  opacity: 0.55;
+}
+
+.capture-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.capture-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.capture-toggle .is-active {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent) inset;
+}
+
+.capture-mode {
+  display: none;
+}
+
+.capture-mode.is-active {
+  display: grid;
+  gap: 12px;
+}
+
+.capture-calculator {
+  display: grid;
+  gap: 12px;
+}
+
+.capture-calc-display {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  font-size: 1.25rem;
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.capture-calc-display:focus {
+  outline: 2px solid color-mix(in oklab, var(--accent) 46%, white 10%);
+  outline-offset: 2px;
+}
+
+.capture-calc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.capture-calc-key {
+  justify-content: center;
+}
+
+.capture-board-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.capture-board-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.capture-board {
+  width: 100%;
+  min-height: 320px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--accent) 12%, transparent), transparent 42%),
+    linear-gradient(180deg, var(--surface-soft), color-mix(in oklab, var(--surface-soft) 84%, var(--surface)));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  cursor: crosshair;
+}
+
+.capture-assistant {
+  display: grid;
+  gap: 12px;
+}
+
+.capture-assistant-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.capture-assistant-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.capture-assistant-transcript {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.capture-assistant-empty,
+.capture-assistant-message {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--surface-soft), color-mix(in oklab, var(--surface-soft) 70%, var(--surface)));
+  padding: 14px 16px;
+}
+
+.capture-assistant-empty strong,
+.capture-assistant-message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.capture-assistant-empty p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.capture-assistant-message {
+  display: grid;
+  gap: 10px;
+}
+
+.capture-assistant-message--assistant {
+  border-color: color-mix(in oklab, var(--accent) 32%, var(--border));
+  background:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--accent) 16%, transparent), transparent 45%),
+    linear-gradient(180deg, color-mix(in oklab, var(--accent) 10%, var(--surface-soft)), color-mix(in oklab, var(--surface-soft) 82%, var(--surface)));
+}
+
+.capture-assistant-message--user {
+  background:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--accent-2) 10%, transparent), transparent 45%),
+    linear-gradient(180deg, color-mix(in oklab, var(--accent-2) 6%, var(--surface-soft)), color-mix(in oklab, var(--surface-soft) 82%, var(--surface)));
+}
+
+.capture-assistant-message-meta {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.capture-assistant-message-body {
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.capture-assistant-composer {
+  display: grid;
+  gap: 10px;
+}
+
+.capture-assistant-input {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  color: var(--text);
+  background: var(--surface-soft);
+  font: inherit;
+}
+
+.capture-assistant-input::placeholder {
+  color: rgba(234, 240, 255, 0.42);
+}
+
+.capture-assistant-input:focus {
+  outline: 2px solid color-mix(in oklab, var(--accent) 46%, white 10%);
+  outline-offset: 2px;
+}
+
+.capture-assistant-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.capture-follow-active {
+  --capture-follow-width: 340px;
+}
+
+body.capture-follow-side-right {
+  padding-right: calc(28px + var(--capture-follow-width, 0px));
+}
+
+body.capture-follow-side-left {
+  padding-left: calc(28px + var(--capture-follow-width, 0px));
+}
+
+.widget-panel[data-widget-id="capture"].is-following {
+  position: fixed;
+  top: 124px;
+  right: 28px;
+  width: min(320px, calc(100vw - 56px));
+  max-height: calc(100vh - 164px);
+  overflow: auto;
+  z-index: 22;
+  cursor: default;
+  box-shadow: var(--shadow);
+}
+
+body.capture-follow-side-left .widget-panel[data-widget-id="capture"].is-following {
+  left: 28px;
+  right: auto;
+}
+
+body.capture-follow-side-right .widget-panel[data-widget-id="capture"].is-following {
+  right: 28px;
+  left: auto;
+}
+
+.widget-panel[data-widget-id="capture"].is-following .capture-shell {
+  max-height: none;
+}
+
+.widget-panel[data-widget-id="capture"].is-following .capture-toggle,
+.widget-panel[data-widget-id="capture"].is-following .capture-follow-controls,
+.widget-panel[data-widget-id="capture"].is-following .capture-assistant-toolbar,
+.widget-panel[data-widget-id="capture"].is-following .capture-assistant-composer-actions {
+  gap: 6px;
+}
+
+.widget-panel[data-widget-id="capture"].is-following .capture-mode.is-active {
+  gap: 10px;
+}
+
+.widget-panel[data-widget-id="capture"].is-following .capture-assistant-transcript {
+  max-height: 280px;
+}
+
+.widget-panel[data-widget-id="capture"].is-following .capture-input,
+.widget-panel[data-widget-id="capture"].is-following .capture-calc-display,
+.widget-panel[data-widget-id="capture"].is-following .capture-assistant-input {
+  padding: 12px;
+}
+
+@media (max-width: 1100px) {
+  body.capture-follow-active,
+  body.capture-follow-side-left,
+  body.capture-follow-side-right {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  .widget-panel[data-widget-id="capture"].is-following {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    width: auto;
+    max-height: none;
+  }
+}
+
+.capture-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  resize: vertical;
+  color: var(--text);
+  background: var(--surface-soft);
+  font: inherit;
+  min-height: 220px;
+}
+
+.capture-input::placeholder {
+  color: rgba(234, 240, 255, 0.42);
+}
+
+.capture-input:focus {
+  outline: 2px solid color-mix(in oklab, var(--accent) 46%, white 10%);
+  outline-offset: 2px;
+}
+
+.panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: end;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 30;
+}
+
+.settings-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(540px, 100vw);
+  height: 100vh;
+  z-index: 40;
+  overflow-y: auto;
+  padding: 24px;
+  border-left: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--panel-strong), var(--surface));
+  box-shadow: -32px 0 80px rgba(0, 0, 0, 0.45);
+}
+
+.drawer-header,
+.drawer-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.drawer-header {
+  margin-bottom: 18px;
+}
+
+.drawer-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.drawer-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.drawer-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.drawer-checkbox {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.drawer-checkbox input {
+  width: auto;
+}
+
+.drawer-form input,
+.drawer-form textarea,
+.drawer-form select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: inherit;
+}
+
+.drawer-form textarea {
+  resize: vertical;
+}
+
+.drawer-form input[type="color"] {
+  min-height: 48px;
+  padding: 4px;
+}
+
+.drawer-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+  .panel,
+  .panel-wide {
+    grid-column: span 12;
+  }
+
+  .spotlight {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-grid {
+    min-width: 1160px;
+  }
+}
+
+@media (max-width: 780px) {
+  body {
+    padding: 16px;
+  }
+
+  .hero,
+  .panel-header,
+  .stack-topline {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .kanban {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-grid {
+    min-width: 1120px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .panel {
+    grid-column: span 12 !important;
+  }
+}

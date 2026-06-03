@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/myaxis.schema.json",
+  "title": "MyAxis Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["workspaces"],
+  "properties": {
+    "defaultWorkspace": {
+      "type": "string",
+      "description": "Workspace id that should open by default."
+    },
+    "workspaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/workspace" }
+    }
+  },
+  "$defs": {
+    "workspace": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "label", "title", "description", "stats", "schedule", "kanban", "calendar", "goals", "spotlight", "quote", "captureHint", "scratchpadKey"],
+      "properties": {
+        "id": { "type": "string", "description": "Stable workspace id." },
+        "label": { "type": "string", "description": "Tab label for the workspace." },
+        "eyebrow": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "accent": { "type": "string", "description": "Hex color used for the theme." },
+        "accent2": { "type": "string", "description": "Secondary hex color used for the theme." },
+        "stats": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/statCard" }
+        },
+        "schedule": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scheduleItem" }
+        },
+        "calendar": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/calendarEvent" }
+        },
+        "kanban": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/kanbanColumn" }
+        },
+        "goals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/goal" }
+        },
+        "spotlight": { "$ref": "#/$defs/spotlight" },
+        "quote": { "type": "string" },
+        "captureHint": { "type": "string" },
+        "scratchpadKey": {
+          "type": "string",
+          "description": "LocalStorage key for private scratchpad text."
+        }
+      }
+    },
+    "statCard": {
+      "type": "object",
+      "required": ["label", "value", "note"],
+      "properties": {
+        "label": { "type": "string" },
+        "value": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "scheduleItem": {
+      "type": "object",
+      "required": ["time", "title", "detail"],
+      "properties": {
+        "time": { "type": "string" },
+        "title": { "type": "string" },
+        "detail": { "type": "string" }
+      }
+    },
+    "calendarEvent": {
+      "type": "object",
+      "required": ["day", "time", "title", "detail"],
+      "properties": {
+        "day": {
+          "type": "string",
+          "enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        },
+        "time": { "type": "string" },
+        "title": { "type": "string" },
+        "detail": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    },
+    "kanbanColumn": {
+      "type": "object",
+      "required": ["id", "title", "cards"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "cards": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/kanbanCard" }
+        }
+      }
+    },
+    "kanbanCard": {
+      "type": "object",
+      "required": ["title", "detail", "tag"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "detail": { "type": "string" },
+        "tag": { "type": "string" }
+      }
+    },
+    "goal": {
+      "type": "object",
+      "required": ["label", "value", "meta"],
+      "properties": {
+        "label": { "type": "string" },
+        "value": { "type": "number" },
+        "meta": { "type": "string" }
+      }
+    },
+    "spotlight": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "title", "body"],
+          "properties": {
+            "type": { "const": "notes" },
+            "title": { "type": "string" },
+            "body": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "title", "cards"],
+          "properties": {
+            "type": { "const": "flashcards" },
+            "title": { "type": "string" },
+            "cards": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/flashcard" }
+            }
+          }
+        }
+      ]
+    },
+    "flashcard": {
+      "type": "object",
+      "required": ["question", "answer"],
+      "properties": {
+        "question": { "type": "string" },
+        "answer": { "type": "string" }
+      }
+    }
+  }
+}

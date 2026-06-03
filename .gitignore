@@ -1,0 +1,11 @@
+.codex/
+config.local.js
+*.local.json
+private-content/data/*.local.json
+private-content/media/personal/
+private-content/resume/
+.env
+.env.*
+node_modules/
+dist/
+

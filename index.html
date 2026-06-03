@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>MyAxis</title>
+    <link rel="stylesheet" href="./styles.css?v=20260603-2" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Built for real life</p>
+          <h1>MyAxis</h1>
+          <p class="lede">
+            One app for work, school, home, projects, and everything else.
+          </p>
+        </div>
+        <div class="hero-meta">
+          <div class="pill" id="date-pill">Today</div>
+          <button class="button button-compact theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle theme">
+            <span class="theme-toggle-icon theme-toggle-icon--sun" aria-hidden="true">☀</span>
+            <span class="theme-toggle-icon theme-toggle-icon--moon" aria-hidden="true">☾</span>
+          </button>
+          <button class="button button-compact motivation-toggle" id="motivation-toggle" type="button" aria-label="Hide motivation quote" title="Hide motivation quote">
+            <span class="motivation-toggle-icon motivation-toggle-icon--show" aria-hidden="true">👁</span>
+            <span class="motivation-toggle-icon motivation-toggle-icon--hide" aria-hidden="true">◌</span>
+          </button>
+          <details class="backup-menu">
+            <summary class="button button-compact backup-menu-trigger" aria-label="Backup options" title="Backup options">
+              <span aria-hidden="true">Backup</span>
+              <span class="backup-menu-caret" aria-hidden="true">⌄</span>
+            </summary>
+            <div class="backup-menu-popover" role="menu" aria-label="Backup options">
+              <button class="button button-compact" id="export-backup" type="button">Export</button>
+              <button class="button button-compact" id="import-backup" type="button">Import</button>
+            </div>
+          </details>
+          <button class="button button-compact button-primary" id="settings-open" type="button">Settings</button>
+          <aside class="motivation-light" id="motivation-sticky" aria-live="polite">
+            <strong id="motivation-quote"></strong>
+          </aside>
+          <input id="backup-file" type="file" accept="application/json" hidden />
+        </div>
+      </header>
+
+      <nav class="workspace-tabs" id="workspace-tabs" aria-label="Workspace selector"></nav>
+
+      <main class="layout">
+        <section class="panel widget-panel" data-widget-id="schedule">
+          <div class="panel-header">
+            <h3>Schedule</h3>
+            <div class="panel-actions">
+              <span class="panel-hint">Day timeline</span>
+              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
+              <button class="button button-compact" id="schedule-new" type="button">Add item</button>
+              <button class="mini-button" id="schedule-prev" type="button" aria-label="Previous day">←</button>
+              <button class="mini-button" id="schedule-next" type="button" aria-label="Next day">→</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+            </div>
+          </div>
+          <div class="schedule-header-row">
+            <div>
+              <strong id="schedule-range-label"></strong>
+              <span class="panel-hint" id="schedule-range-detail"></span>
+            </div>
+          </div>
+          <div class="stack-list" id="schedule-list"></div>
+        </section>
+
+        <section class="panel widget-panel" data-widget-id="calendar">
+          <div class="panel-header">
+            <h3>Calendar</h3>
+            <div class="panel-actions">
+              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
+              <button class="button button-compact" id="calendar-new" type="button">Add event</button>
+              <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
+                <button class="button button-compact" id="calendar-view-week" type="button">Week</button>
+                <button class="button button-compact" id="calendar-view-month" type="button">Month</button>
+              </div>
+              <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+            </div>
+          </div>
+          <div class="calendar-header-row">
+            <div>
+              <strong id="calendar-range-label"></strong>
+              <span class="panel-hint" id="calendar-range-detail"></span>
+            </div>
+            <div class="calendar-controls">
+              <button class="button button-compact" id="calendar-prev" type="button">←</button>
+              <button class="button button-compact" id="calendar-next" type="button">→</button>
+            </div>
+          </div>
+          <div class="calendar-shell">
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </div>
+        </section>
+
+        <section class="panel widget-panel" data-widget-id="kanban">
+          <div class="panel-header">
+            <h3 id="kanban-title">Kanban</h3>
+            <div class="panel-actions">
+              <span class="panel-hint" id="kanban-hint">Drag cards between columns</span>
+              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
+              <button class="button button-compact" id="task-new" type="button">Add task</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+            </div>
+          </div>
+          <div class="kanban" id="kanban-board"></div>
+        </section>
+
+          <section class="panel panel-wide widget-panel" data-widget-id="spotlight">
+          <div class="panel-header">
+            <h3 id="spotlight-title"></h3>
+            <div class="panel-actions">
+              <span class="panel-hint" id="spotlight-hint"></span>
+              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
+              <button class="button button-compact" id="flashcard-new" type="button">Add card</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+            </div>
+          </div>
+          <div class="spotlight" id="spotlight"></div>
+        </section>
+
+        <section class="panel widget-panel" data-widget-id="capture">
+          <div class="panel-header">
+            <h3>Capture</h3>
+            <div class="panel-actions">
+              <span class="panel-hint">Private scratchpad</span>
+              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+            </div>
+          </div>
+          <div id="capture-panel"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="drawer-backdrop hidden" id="drawer-backdrop"></div>
+    <aside class="settings-drawer hidden" id="settings-drawer" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <p class="eyebrow">Private controls</p>
+          <h2 id="drawer-title">Settings</h2>
+        </div>
+        <button class="button button-compact" id="settings-close" type="button">Close</button>
+      </div>
+
+      <div class="drawer-section" id="drawer-workspace-section">
+        <div class="drawer-section-header">
+          <h3>Workspace style</h3>
+          <span class="panel-hint">Local only</span>
+        </div>
+        <form class="drawer-form" id="workspace-settings-form">
+          <label>
+            Workspace
+            <select id="workspace-settings-workspace"></select>
+          </label>
+          <label>
+            Label
+            <input id="workspace-settings-label" type="text" />
+          </label>
+          <label>
+            Title
+            <input id="workspace-settings-title" type="text" />
+          </label>
+          <label>
+            Description
+            <textarea id="workspace-settings-description" rows="3"></textarea>
+          </label>
+          <label>
+            Accent
+            <input id="workspace-settings-accent" type="color" />
+          </label>
+          <label>
+            Accent 2
+            <input id="workspace-settings-accent2" type="color" />
+          </label>
+          <label>
+            Default workspace
+            <select id="workspace-settings-default"></select>
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" type="submit">Save workspace</button>
+            <button class="button" id="workspace-settings-reset" type="button">Reset overrides</button>
+          </div>
+        </form>
+
+        <div class="drawer-subsection hidden" id="home-calendar-section">
+          <div class="drawer-section-header">
+            <h4>Home calendar</h4>
+            <span class="panel-hint">Google Calendar sync</span>
+          </div>
+          <form class="drawer-form" id="home-calendar-form">
+            <label>
+              Google Client ID
+              <input id="home-calendar-client-id" type="text" placeholder="apps.googleusercontent.com" />
+            </label>
+            <label>
+              Calendar ID
+              <input id="home-calendar-calendar-id" type="text" placeholder="primary" />
+            </label>
+            <label class="drawer-checkbox">
+              <input id="home-calendar-enabled" type="checkbox" />
+              <span>Enable sync for this workspace</span>
+            </label>
+            <div class="drawer-actions">
+              <button class="button button-primary" id="home-calendar-save" type="submit">Save connection</button>
+              <button class="button" id="home-calendar-sync" type="button">Sync now</button>
+              <button class="button button-danger" id="home-calendar-disconnect" type="button">Disconnect</button>
+            </div>
+          </form>
+          <p class="panel-hint" id="home-calendar-status">No calendar connected yet.</p>
+        </div>
+      </div>
+
+      <div class="drawer-section hidden" id="drawer-task-section">
+        <div class="drawer-section-header">
+          <h3>Task editor</h3>
+          <span class="panel-hint">Create or update cards</span>
+        </div>
+        <form class="drawer-form" id="task-form">
+          <input id="task-form-card-id" type="hidden" />
+          <label>
+            Workspace
+            <select id="task-form-workspace"></select>
+          </label>
+          <label>
+            Column
+            <select id="task-form-column"></select>
+          </label>
+          <label>
+            Title
+            <input id="task-form-title" type="text" required />
+          </label>
+          <label>
+            Detail
+            <textarea id="task-form-detail" rows="3" required></textarea>
+          </label>
+          <label>
+            Tag
+            <input id="task-form-tag" type="text" required />
+          </label>
+          <div class="drawer-subsection">
+            <div class="drawer-section-header">
+              <h4>Subtasks</h4>
+              <button class="button button-compact" id="task-form-add-subtask" type="button">Add subtask</button>
+            </div>
+            <div class="task-subtasks" id="task-form-subtasks"></div>
+            <p class="panel-hint">Finish these before moving the task out of To-do.</p>
+          </div>
+          <div class="drawer-actions">
+            <button class="button button-primary" type="submit">Save task</button>
+            <button class="button" id="task-form-clear" type="button">New task</button>
+            <button class="button button-danger" id="task-form-delete" type="button">Delete</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="drawer-section hidden" id="drawer-schedule-section">
+        <div class="drawer-section-header">
+          <h3>Timeline editor</h3>
+          <span class="panel-hint">Add items for the selected day</span>
+        </div>
+        <form class="drawer-form" id="schedule-form">
+          <input id="schedule-form-item-id" type="hidden" />
+          <label>
+            Workspace
+            <select id="schedule-form-workspace"></select>
+          </label>
+          <label>
+            Day
+            <select id="schedule-form-day"></select>
+          </label>
+          <label>
+            Time
+            <input id="schedule-form-time" type="time" required />
+          </label>
+          <label>
+            Title
+            <input id="schedule-form-title" type="text" required />
+          </label>
+          <label>
+            Detail
+            <textarea id="schedule-form-detail" rows="3" required></textarea>
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" type="submit">Save item</button>
+            <button class="button" id="schedule-form-clear" type="button">New item</button>
+            <button class="button button-danger" id="schedule-form-delete" type="button">Delete</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="drawer-section hidden" id="drawer-calendar-section">
+        <div class="drawer-section-header">
+          <h3>Calendar editor</h3>
+          <span class="panel-hint">Create or update events</span>
+        </div>
+        <form class="drawer-form" id="calendar-form">
+          <input id="calendar-form-event-index" type="hidden" />
+          <label>
+            Workspace
+            <select id="calendar-form-workspace"></select>
+          </label>
+          <label>
+            Day
+            <select id="calendar-form-day"></select>
+          </label>
+          <label>
+            Time
+            <input id="calendar-form-time" type="time" required />
+          </label>
+          <label>
+            Title
+            <input id="calendar-form-title" type="text" required />
+          </label>
+          <label>
+            Detail
+            <textarea id="calendar-form-detail" rows="3" required></textarea>
+          </label>
+          <label>
+            Type
+            <input id="calendar-form-type" type="text" required />
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" type="submit">Save event</button>
+            <button class="button" id="calendar-form-clear" type="button">New event</button>
+            <button class="button button-danger" id="calendar-form-delete" type="button">Delete</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="drawer-section hidden" id="drawer-flashcard-section">
+        <div class="drawer-section-header">
+          <h3>Flashcard editor</h3>
+          <span class="panel-hint">Study and interview prep</span>
+        </div>
+        <form class="drawer-form" id="flashcard-form">
+          <input id="flashcard-form-card-id" type="hidden" />
+          <label>
+            Workspace
+            <select id="flashcard-form-workspace"></select>
+          </label>
+          <label>
+            Category
+            <select id="flashcard-form-category">
+              <option value="study">Study</option>
+              <option value="interview">Interview</option>
+            </select>
+          </label>
+          <label>
+            Question
+            <textarea id="flashcard-form-question" rows="3" required></textarea>
+          </label>
+          <label>
+            Answer
+            <textarea id="flashcard-form-answer" rows="4" required></textarea>
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" type="submit">Save card</button>
+            <button class="button" id="flashcard-form-clear" type="button">New card</button>
+            <button class="button button-danger" id="flashcard-form-delete" type="button">Delete</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="drawer-section hidden" id="drawer-story-section">
+        <div class="drawer-section-header">
+          <h3>Work story editor</h3>
+          <span class="panel-hint">Subject and summary</span>
+        </div>
+        <form class="drawer-form" id="story-form">
+          <input id="story-form-card-id" type="hidden" />
+          <label>
+            Subject
+            <input id="story-form-subject" type="text" required />
+          </label>
+          <label>
+            Paragraph
+            <textarea id="story-form-paragraph" rows="6" required></textarea>
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" type="submit">Save story</button>
+            <button class="button" id="story-form-clear" type="button">New story</button>
+            <button class="button button-danger" id="story-form-delete" type="button">Delete</button>
+          </div>
+        </form>
+      </div>
+    </aside>
+
+    <script type="module" src="./app.js?v=20260603-2"></script>
+  </body>
+</html>
