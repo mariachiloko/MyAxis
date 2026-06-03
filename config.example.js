@@ -3,6 +3,12 @@ export default {
   aiEndpoint: "",
   apiBaseUrl: "",
   apiAccessToken: "",
+  cognitoRegion: "",
+  cognitoUserPoolId: "",
+  cognitoClientId: "",
+  cognitoHostedUiDomain: "",
+  cognitoRedirectUri: "",
+  cognitoLogoutUri: "",
   workspaces: [
     {
       id: "work",

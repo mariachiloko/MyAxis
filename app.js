@@ -20,7 +20,10 @@ const STORAGE_KEYS = {
   hiddenCalendarEvents: "workspace-dashboard:hidden-calendar-events",
   calendarTodos: "workspace-dashboard:calendar-todos",
   backendApiBaseUrl: "workspace-dashboard:backend-api-base-url",
-  backendApiToken: "workspace-dashboard:backend-api-token"
+  backendApiToken: "workspace-dashboard:backend-api-token",
+  cognitoSettings: "workspace-dashboard:cognito-settings",
+  cognitoSession: "workspace-dashboard:cognito-session",
+  cognitoTransaction: "workspace-dashboard:cognito-transaction"
 };
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -121,11 +124,21 @@ const drawerTitleEl = document.getElementById("drawer-title");
 const drawerWorkspaceSectionEl = document.getElementById("drawer-workspace-section");
 const backendSyncFormEl = document.getElementById("backend-sync-form");
 const backendSyncBaseUrlEl = document.getElementById("backend-sync-base-url");
-const backendSyncTokenEl = document.getElementById("backend-sync-token");
 const backendSyncSaveEl = document.getElementById("backend-sync-save");
 const backendSyncCurrentEl = document.getElementById("backend-sync-current");
 const backendSyncClearEl = document.getElementById("backend-sync-clear");
 const backendSyncStatusEl = document.getElementById("backend-sync-status");
+const cognitoSettingsFormEl = document.getElementById("cognito-settings-form");
+const cognitoRegionEl = document.getElementById("cognito-region");
+const cognitoUserPoolIdEl = document.getElementById("cognito-user-pool-id");
+const cognitoClientIdEl = document.getElementById("cognito-client-id");
+const cognitoHostedUiDomainEl = document.getElementById("cognito-hosted-ui-domain");
+const cognitoRedirectUriEl = document.getElementById("cognito-redirect-uri");
+const cognitoLogoutUriEl = document.getElementById("cognito-logout-uri");
+const cognitoSaveEl = document.getElementById("cognito-save");
+const cognitoLoginEl = document.getElementById("cognito-login");
+const cognitoLogoutEl = document.getElementById("cognito-logout");
+const cognitoStatusEl = document.getElementById("cognito-status");
 const homeCalendarSectionEl = document.getElementById("home-calendar-section");
 const drawerTaskSectionEl = document.getElementById("drawer-task-section");
 const drawerScheduleSectionEl = document.getElementById("drawer-schedule-section");
@@ -214,9 +227,13 @@ function bootstrap() {
   wireCalendarControls();
   wireLayoutControls();
   wireBackupControls();
+  wireCognitoAuthControls();
   wireBackendSyncControls();
   renderWorkspace(getWorkspace(appState.workspaceId));
   refreshMotivationQuote(getWorkspace(appState.workspaceId));
+  handleCognitoRedirect().catch((error) => {
+    console.warn("Unable to complete Cognito login.", error);
+  });
   hydrateBackendAccountState().catch((error) => {
     console.warn("Unable to hydrate backend state.", error);
   });
@@ -403,6 +420,17 @@ function wireBackendSyncControls() {
   backendSyncCurrentEl?.addEventListener("click", handleBackendSyncCurrentClick);
   backendSyncClearEl?.addEventListener("click", handleBackendSyncClearClick);
   fillBackendSyncForm();
+}
+
+function wireCognitoAuthControls() {
+  if (!cognitoSettingsFormEl) {
+    return;
+  }
+
+  cognitoSettingsFormEl.addEventListener("submit", handleCognitoSettingsSubmit);
+  cognitoLoginEl?.addEventListener("click", handleCognitoLoginClick);
+  cognitoLogoutEl?.addEventListener("click", handleCognitoLogoutClick);
+  fillCognitoSettingsForm();
 }
 
 function renderTabs() {
@@ -2673,6 +2701,7 @@ function syncDrawerSelections() {
 
   fillWorkspaceSettingsForm(workspaceSettingsWorkspaceEl.value || appState.workspaceId);
   fillBackendSyncForm();
+  fillCognitoSettingsForm();
   if (appState.drawerMode === "workspace") {
     return;
   }
@@ -2749,14 +2778,11 @@ function fillBackendSyncForm() {
   if (backendSyncBaseUrlEl) {
     backendSyncBaseUrlEl.value = backendSync.baseUrl;
   }
-  if (backendSyncTokenEl) {
-    backendSyncTokenEl.value = backendSync.accessToken;
-  }
   if (backendSyncCurrentEl) {
-    backendSyncCurrentEl.disabled = !backendSync.baseUrl || !backendSync.accessToken;
+    backendSyncCurrentEl.disabled = !backendSync.baseUrl;
   }
   if (backendSyncClearEl) {
-    backendSyncClearEl.disabled = !backendSync.baseUrl && !backendSync.accessToken;
+    backendSyncClearEl.disabled = !backendSync.baseUrl;
   }
   updateBackendSyncStatus();
 }
@@ -2773,9 +2799,7 @@ function updateBackendSyncStatus(message = "") {
 
   const backendSync = getBackendSyncConfig();
   backendSyncStatusEl.textContent = backendSync.baseUrl
-    ? backendSync.accessToken
-      ? `Cloud sync ready at ${backendSync.baseUrl}.`
-      : `Cloud sync base URL saved at ${backendSync.baseUrl}, but no access token is set yet.`
+    ? `Cloud sync ready at ${backendSync.baseUrl}.`
     : "No cloud sync configured yet.";
 }
 
@@ -2802,15 +2826,21 @@ function handleBackendSyncSubmit(event) {
   event.preventDefault();
   persistBackendSyncConfig({
     baseUrl: backendSyncBaseUrlEl?.value || "",
-    accessToken: backendSyncTokenEl?.value || ""
+    accessToken: ""
   });
   updateBackendSyncStatus("Cloud sync settings saved locally.");
 }
 
 async function handleBackendSyncCurrentClick() {
   const backendSync = getBackendSyncConfig();
-  if (!backendSync.baseUrl || !backendSync.accessToken) {
+  if (!backendSync.baseUrl) {
     window.alert("Save your cloud sync settings first.");
+    return;
+  }
+
+  const authorizationToken = await resolveBackendAuthorizationToken().catch(() => "");
+  if (!authorizationToken) {
+    window.alert("Sign in with Cognito or add a backend token before syncing.");
     return;
   }
 
@@ -2823,7 +2853,7 @@ async function handleBackendSyncCurrentClick() {
 }
 
 function handleBackendSyncClearClick() {
-  if (!window.confirm("Clear the saved cloud sync URL and token from this browser?")) {
+  if (!window.confirm("Clear the saved cloud sync URL and legacy token from this browser?")) {
     return;
   }
 
@@ -2832,9 +2862,355 @@ function handleBackendSyncClearClick() {
   fillBackendSyncForm();
 }
 
+function getStoredCognitoSettings() {
+  return readStoredJson(STORAGE_KEYS.cognitoSettings, {});
+}
+
+function getCognitoSettings() {
+  const stored = getStoredCognitoSettings();
+  const redirectUri = String(stored.redirectUri || config.cognitoRedirectUri || `${window.location.origin}/`).trim();
+  const logoutUri = String(stored.logoutUri || config.cognitoLogoutUri || `${window.location.origin}/`).trim();
+
+  return {
+    region: String(stored.region || config.cognitoRegion || "us-east-1").trim(),
+    userPoolId: String(stored.userPoolId || config.cognitoUserPoolId || "").trim(),
+    clientId: String(stored.clientId || config.cognitoClientId || "").trim(),
+    hostedUiDomain: String(stored.hostedUiDomain || config.cognitoHostedUiDomain || "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+    redirectUri,
+    logoutUri
+  };
+}
+
+function fillCognitoSettingsForm() {
+  if (!cognitoSettingsFormEl) {
+    return;
+  }
+
+  const settings = getCognitoSettings();
+  if (cognitoRegionEl) {
+    cognitoRegionEl.value = settings.region;
+  }
+  if (cognitoUserPoolIdEl) {
+    cognitoUserPoolIdEl.value = settings.userPoolId;
+  }
+  if (cognitoClientIdEl) {
+    cognitoClientIdEl.value = settings.clientId;
+  }
+  if (cognitoHostedUiDomainEl) {
+    cognitoHostedUiDomainEl.value = settings.hostedUiDomain;
+  }
+  if (cognitoRedirectUriEl) {
+    cognitoRedirectUriEl.value = settings.redirectUri;
+  }
+  if (cognitoLogoutUriEl) {
+    cognitoLogoutUriEl.value = settings.logoutUri;
+  }
+
+  updateCognitoStatus();
+}
+
+function updateCognitoStatus(message = "") {
+  if (!cognitoStatusEl) {
+    return;
+  }
+
+  if (message) {
+    cognitoStatusEl.textContent = message;
+    return;
+  }
+
+  const settings = getCognitoSettings();
+  const session = getStoredCognitoSession();
+  if (!settings.clientId || !settings.hostedUiDomain || !settings.userPoolId) {
+    cognitoStatusEl.textContent = "No Cognito sign-in configured yet.";
+    return;
+  }
+
+  if (!session) {
+    cognitoStatusEl.textContent = `Configured for ${settings.userPoolId}. Sign in to use cloud sync.`;
+    return;
+  }
+
+  const userLabel = session.email || session.name || session.sub || "signed in";
+  cognitoStatusEl.textContent = session.expiresAt && Date.now() < session.expiresAt
+    ? `Signed in as ${userLabel}.`
+    : session.refreshToken
+      ? `Signed in as ${userLabel}; session will refresh when needed.`
+      : `Signed in as ${userLabel}; please sign in again soon.`;
+}
+
+function persistCognitoSettings(settings) {
+  const nextSettings = {
+    region: String(settings.region || "").trim(),
+    userPoolId: String(settings.userPoolId || "").trim(),
+    clientId: String(settings.clientId || "").trim(),
+    hostedUiDomain: String(settings.hostedUiDomain || "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+    redirectUri: String(settings.redirectUri || "").trim() || `${window.location.origin}/`,
+    logoutUri: String(settings.logoutUri || "").trim() || `${window.location.origin}/`
+  };
+
+  localStorage.setItem(STORAGE_KEYS.cognitoSettings, JSON.stringify(nextSettings));
+  fillCognitoSettingsForm();
+}
+
+function handleCognitoSettingsSubmit(event) {
+  event.preventDefault();
+  persistCognitoSettings({
+    region: cognitoRegionEl?.value || "",
+    userPoolId: cognitoUserPoolIdEl?.value || "",
+    clientId: cognitoClientIdEl?.value || "",
+    hostedUiDomain: cognitoHostedUiDomainEl?.value || "",
+    redirectUri: cognitoRedirectUriEl?.value || "",
+    logoutUri: cognitoLogoutUriEl?.value || ""
+  });
+  updateCognitoStatus("Cognito settings saved locally.");
+}
+
+async function handleCognitoLoginClick() {
+  const settings = getCognitoSettings();
+  if (!settings.clientId || !settings.hostedUiDomain || !settings.userPoolId) {
+    window.alert("Fill out the Cognito settings before signing in.");
+    return;
+  }
+
+  const transaction = await createCognitoTransaction();
+  localStorage.setItem(STORAGE_KEYS.cognitoTransaction, JSON.stringify(transaction));
+  const authorizeUrl = new URL(`https://${settings.hostedUiDomain}/oauth2/authorize`);
+  authorizeUrl.searchParams.set("client_id", settings.clientId);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("scope", "openid email profile");
+  authorizeUrl.searchParams.set("redirect_uri", settings.redirectUri);
+  authorizeUrl.searchParams.set("state", transaction.state);
+  authorizeUrl.searchParams.set("code_challenge", transaction.codeChallenge);
+  authorizeUrl.searchParams.set("code_challenge_method", "S256");
+  window.location.assign(authorizeUrl.toString());
+}
+
+async function handleCognitoLogoutClick() {
+  const settings = getCognitoSettings();
+  clearStoredCognitoSession();
+  updateCognitoStatus("Signed out.");
+  if (settings.clientId && settings.hostedUiDomain) {
+    const logoutUrl = new URL(`https://${settings.hostedUiDomain}/logout`);
+    logoutUrl.searchParams.set("client_id", settings.clientId);
+    logoutUrl.searchParams.set("logout_uri", settings.logoutUri);
+    window.location.assign(logoutUrl.toString());
+  } else {
+    fillCognitoSettingsForm();
+  }
+}
+
+async function handleCognitoRedirect() {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+  const errorDescription = url.searchParams.get("error_description");
+
+  if (error) {
+    const message = errorDescription || error;
+    window.alert(`Cognito sign-in failed: ${message}`);
+    updateCognitoStatus(`Sign-in failed: ${message}`);
+    return;
+  }
+
+  if (!code || !state) {
+    await maybeRefreshCognitoSession();
+    return;
+  }
+
+  const transaction = readStoredJson(STORAGE_KEYS.cognitoTransaction, null);
+  if (!transaction || transaction.state !== state) {
+    window.alert("That sign-in session could not be verified. Try again.");
+    return;
+  }
+
+  const settings = getCognitoSettings();
+  const session = await exchangeCognitoCodeForSession(settings, code, transaction.codeVerifier);
+  saveCognitoSession(session);
+  localStorage.removeItem(STORAGE_KEYS.cognitoTransaction);
+  url.search = "";
+  window.history.replaceState({}, document.title, url.toString());
+  fillCognitoSettingsForm();
+  updateCognitoStatus("Signed in successfully.");
+  await hydrateBackendAccountState();
+}
+
+function getStoredCognitoSession() {
+  const session = readStoredJson(STORAGE_KEYS.cognitoSession, null);
+  if (!session || typeof session !== "object") {
+    return null;
+  }
+
+  if (!session.accessToken && !session.idToken) {
+    return null;
+  }
+
+  return session;
+}
+
+function saveCognitoSession(session) {
+  const normalized = normalizeCognitoSession(session);
+  localStorage.setItem(STORAGE_KEYS.cognitoSession, JSON.stringify(normalized));
+  fillCognitoSettingsForm();
+}
+
+function clearStoredCognitoSession() {
+  localStorage.removeItem(STORAGE_KEYS.cognitoSession);
+  localStorage.removeItem(STORAGE_KEYS.cognitoTransaction);
+  fillCognitoSettingsForm();
+}
+
+function normalizeCognitoSession(session) {
+  const claims = parseJwtClaims(session?.idToken || session?.accessToken || "");
+  return {
+    accessToken: String(session?.accessToken || "").trim(),
+    idToken: String(session?.idToken || "").trim(),
+    refreshToken: String(session?.refreshToken || "").trim(),
+    expiresAt: Number(session?.expiresAt || 0),
+    tokenType: String(session?.tokenType || "Bearer").trim(),
+    scope: String(session?.scope || "").trim(),
+    sub: String(claims.sub || "").trim(),
+    email: String(claims.email || claims.username || "").trim(),
+    name: String(claims.name || claims.preferred_username || claims.email || "").trim()
+  };
+}
+
+function parseJwtClaims(token) {
+  const parts = String(token || "").split(".");
+  if (parts.length < 2) {
+    return {};
+  }
+
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(payload.length + ((4 - (payload.length % 4)) % 4), "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return {};
+  }
+}
+
+async function maybeRefreshCognitoSession() {
+  const session = getStoredCognitoSession();
+  const settings = getCognitoSettings();
+  if (!session || !session.refreshToken || !settings.clientId || !settings.hostedUiDomain) {
+    return session;
+  }
+
+  if (session.expiresAt && Date.now() < session.expiresAt - 60_000) {
+    return session;
+  }
+
+  const refreshed = await refreshCognitoSession(settings, session.refreshToken);
+  saveCognitoSession(refreshed);
+  return refreshed;
+}
+
+async function resolveBackendAuthorizationToken() {
+  const session = await maybeRefreshCognitoSession().catch(() => getStoredCognitoSession());
+  if (session?.idToken) {
+    return session.idToken;
+  }
+  if (session?.accessToken) {
+    return session.accessToken;
+  }
+  const backendSync = getBackendSyncConfig();
+  return backendSync.accessToken || "";
+}
+
+async function createCognitoTransaction() {
+  const codeVerifier = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)));
+  const codeChallenge = await sha256CodeChallenge(codeVerifier);
+  return {
+    state: base64UrlEncode(crypto.getRandomValues(new Uint8Array(16))),
+    codeVerifier,
+    codeChallenge
+  };
+}
+
+async function exchangeCognitoCodeForSession(settings, code, codeVerifier) {
+  const tokenUrl = new URL(`https://${settings.hostedUiDomain}/oauth2/token`);
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: settings.clientId,
+    code,
+    redirect_uri: settings.redirectUri,
+    code_verifier: codeVerifier
+  });
+
+  const response = await fetch(tokenUrl.toString(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error_description || payload?.error || "Unable to complete Cognito sign-in.");
+  }
+
+  return normalizeCognitoSession({
+    accessToken: payload.access_token,
+    idToken: payload.id_token,
+    refreshToken: payload.refresh_token,
+    expiresAt: Date.now() + Math.max(0, Number(payload.expires_in || 3600)) * 1000,
+    tokenType: payload.token_type,
+    scope: payload.scope
+  });
+}
+
+async function refreshCognitoSession(settings, refreshToken) {
+  const tokenUrl = new URL(`https://${settings.hostedUiDomain}/oauth2/token`);
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: settings.clientId,
+    refresh_token: refreshToken
+  });
+
+  const response = await fetch(tokenUrl.toString(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error_description || payload?.error || "Unable to refresh Cognito session.");
+  }
+
+  return normalizeCognitoSession({
+    accessToken: payload.access_token,
+    idToken: payload.id_token || payload.access_token,
+    refreshToken,
+    expiresAt: Date.now() + Math.max(0, Number(payload.expires_in || 3600)) * 1000,
+    tokenType: payload.token_type,
+    scope: payload.scope
+  });
+}
+
+async function sha256CodeChallenge(codeVerifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(codeVerifier);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncode(new Uint8Array(hash));
+}
+
+function base64UrlEncode(bytes) {
+  let base64 = "";
+  for (const byte of bytes) {
+    base64 += String.fromCharCode(byte);
+  }
+  return btoa(base64).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 async function hydrateBackendAccountState() {
   const backendSync = getBackendSyncConfig();
-  if (!backendSync.baseUrl || !backendSync.accessToken) {
+  if (!backendSync.baseUrl) {
     return null;
   }
 
@@ -2919,7 +3295,7 @@ async function hydrateBackendAccountState() {
 
 async function syncWorkspaceSettingsToBackend(workspaceId) {
   const backendSync = getBackendSyncConfig();
-  if (!backendSync.baseUrl || !backendSync.accessToken) {
+  if (!backendSync.baseUrl) {
     return null;
   }
 
@@ -2941,7 +3317,7 @@ async function syncWorkspaceSettingsToBackend(workspaceId) {
 
 async function syncHomeCalendarConnectionToBackend(workspaceId) {
   const backendSync = getBackendSyncConfig();
-  if (!backendSync.baseUrl || !backendSync.accessToken) {
+  if (!backendSync.baseUrl) {
     return null;
   }
 
@@ -2967,19 +3343,43 @@ async function syncHomeCalendarConnectionToBackend(workspaceId) {
 
 async function backendRequest(path, options = {}) {
   const backendSync = getBackendSyncConfig();
-  if (!backendSync.baseUrl || !backendSync.accessToken) {
+  if (!backendSync.baseUrl) {
     return null;
   }
 
-  const response = await fetch(new URL(path, backendSync.baseUrl).toString(), {
+  const authorizationToken = await resolveBackendAuthorizationToken().catch(() => "");
+  if (!authorizationToken) {
+    return null;
+  }
+
+  const requestUrl = new URL(path, backendSync.baseUrl).toString();
+  const requestOptions = async () => ({
     method: options.method || "GET",
     headers: {
-      Authorization: `Bearer ${backendSync.accessToken}`,
+      Authorization: `Bearer ${authorizationToken}`,
       ...(options.body ? { "content-type": "application/json" } : {}),
       ...(options.headers || {})
     },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
+
+  let response = await fetch(requestUrl, await requestOptions());
+  if (response.status === 401) {
+    await maybeRefreshCognitoSession().catch(() => null);
+    const refreshedToken = await resolveBackendAuthorizationToken().catch(() => "");
+    if (!refreshedToken) {
+      return null;
+    }
+    response = await fetch(requestUrl, {
+      method: options.method || "GET",
+      headers: {
+        Authorization: `Bearer ${refreshedToken}`,
+        ...(options.body ? { "content-type": "application/json" } : {}),
+        ...(options.headers || {})
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+  }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
@@ -5276,7 +5676,13 @@ function mergeDashboardConfig(base, ...overrides) {
     "aiEndpoint",
     "motivationQuoteEndpoint",
     "apiBaseUrl",
-    "apiAccessToken"
+    "apiAccessToken",
+    "cognitoRegion",
+    "cognitoUserPoolId",
+    "cognitoClientId",
+    "cognitoHostedUiDomain",
+    "cognitoRedirectUri",
+    "cognitoLogoutUri"
   ];
 
   for (const override of overrides) {

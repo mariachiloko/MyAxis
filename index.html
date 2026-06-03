@@ -197,10 +197,6 @@
               API base URL
               <input id="backend-sync-base-url" type="url" placeholder="https://api.example.com" />
             </label>
-            <label>
-              Access token
-              <input id="backend-sync-token" type="password" placeholder="Bearer token" />
-            </label>
             <div class="drawer-actions">
               <button class="button button-primary" id="backend-sync-save" type="submit">Save cloud settings</button>
               <button class="button" id="backend-sync-current" type="button">Sync current workspace</button>
@@ -208,6 +204,45 @@
             </div>
           </form>
           <p class="panel-hint" id="backend-sync-status">No cloud sync configured yet.</p>
+        </div>
+
+        <div class="drawer-subsection">
+          <div class="drawer-section-header">
+            <h4>Cognito sign-in</h4>
+            <span class="panel-hint">AWS account login</span>
+          </div>
+          <form class="drawer-form" id="cognito-settings-form">
+            <label>
+              Region
+              <input id="cognito-region" type="text" placeholder="us-east-1" />
+            </label>
+            <label>
+              User Pool ID
+              <input id="cognito-user-pool-id" type="text" placeholder="us-east-1_XXXXXXXXX" />
+            </label>
+            <label>
+              App Client ID
+              <input id="cognito-client-id" type="text" placeholder="apps.googleusercontent.com" />
+            </label>
+            <label>
+              Hosted UI domain
+              <input id="cognito-hosted-ui-domain" type="text" placeholder="myaxis-123456789.auth.us-east-1.amazoncognito.com" />
+            </label>
+            <label>
+              Redirect URI
+              <input id="cognito-redirect-uri" type="url" />
+            </label>
+            <label>
+              Logout URI
+              <input id="cognito-logout-uri" type="url" />
+            </label>
+            <div class="drawer-actions">
+              <button class="button button-primary" id="cognito-save" type="submit">Save sign-in</button>
+              <button class="button" id="cognito-login" type="button">Sign in</button>
+              <button class="button button-danger" id="cognito-logout" type="button">Sign out</button>
+            </div>
+          </form>
+          <p class="panel-hint" id="cognito-status">No sign-in configured yet.</p>
         </div>
 
         <div class="drawer-subsection hidden" id="home-calendar-section">

@@ -22,6 +22,30 @@
       "type": "string",
       "description": "Optional bearer token for authenticated backend requests."
     },
+    "cognitoRegion": {
+      "type": "string",
+      "description": "Optional Cognito region for hosted UI login."
+    },
+    "cognitoUserPoolId": {
+      "type": "string",
+      "description": "Optional Cognito user pool ID."
+    },
+    "cognitoClientId": {
+      "type": "string",
+      "description": "Optional Cognito app client ID."
+    },
+    "cognitoHostedUiDomain": {
+      "type": "string",
+      "description": "Optional Cognito hosted UI domain."
+    },
+    "cognitoRedirectUri": {
+      "type": "string",
+      "description": "Optional redirect URI used after login."
+    },
+    "cognitoLogoutUri": {
+      "type": "string",
+      "description": "Optional redirect URI used after logout."
+    },
     "workspaces": {
       "type": "array",
       "minItems": 1,
