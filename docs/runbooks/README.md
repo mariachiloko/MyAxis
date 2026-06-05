@@ -9,3 +9,4 @@ These are short, public notes for how the project is built and maintained.
 - [Backend sync](backend-sync.md)
 - [Google Calendar sync](google-calendar-sync.md)
 - [Calendar linking](calendar-linking.md)
+- [Spotify player](spotify-player.md)

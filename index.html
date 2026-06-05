@@ -39,6 +39,7 @@
             </div>
           </details>
           <button class="button button-compact button-primary" id="settings-open" type="button">Settings</button>
+          <button class="button button-compact" id="widgets-open" type="button">Widgets</button>
           <aside class="motivation-light" id="motivation-sticky" aria-live="polite">
             <strong id="motivation-quote"></strong>
           </aside>
@@ -54,11 +55,11 @@
             <h3>Schedule</h3>
             <div class="panel-actions">
               <span class="panel-hint">Day timeline</span>
-              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
               <button class="button button-compact" id="schedule-new" type="button">Add item</button>
               <button class="mini-button" id="schedule-prev" type="button" aria-label="Previous day">←</button>
               <button class="mini-button" id="schedule-next" type="button" aria-label="Next day">→</button>
               <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-visible" aria-label="Remove widget">×</button>
             </div>
           </div>
           <div class="schedule-header-row">
@@ -74,13 +75,14 @@
           <div class="panel-header">
             <h3>Calendar</h3>
             <div class="panel-actions">
-              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
+              <button class="button button-compact" id="calendar-link" type="button">Link calendar</button>
               <button class="button button-compact" id="calendar-new" type="button">Add event</button>
               <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
                 <button class="button button-compact" id="calendar-view-week" type="button">Week</button>
                 <button class="button button-compact" id="calendar-view-month" type="button">Month</button>
               </div>
               <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-visible" aria-label="Remove widget">×</button>
             </div>
           </div>
           <div class="calendar-header-row">
@@ -103,12 +105,36 @@
             <h3 id="kanban-title">Kanban</h3>
             <div class="panel-actions">
               <span class="panel-hint" id="kanban-hint">Drag cards between columns</span>
-              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
               <button class="button button-compact" id="task-new" type="button">Add task</button>
               <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-visible" aria-label="Remove widget">×</button>
             </div>
           </div>
           <div class="kanban" id="kanban-board"></div>
+        </section>
+
+        <section class="panel widget-panel" data-widget-id="weather">
+          <div class="panel-header">
+            <h3>Weather</h3>
+            <div class="panel-actions">
+              <span class="panel-hint" id="weather-hint">Current city or current location</span>
+              <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-visible" aria-label="Remove widget">×</button>
+            </div>
+          </div>
+          <div id="weather-panel" class="weather-panel"></div>
+        </section>
+
+        <section class="panel widget-panel" data-widget-id="spotify">
+          <div class="panel-header">
+            <h3>Spotify</h3>
+            <div class="panel-actions">
+              <span class="panel-hint" id="spotify-hint">Sign in to listen</span>
+              <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-visible" aria-label="Remove widget">×</button>
+            </div>
+          </div>
+          <div id="spotify-panel" class="spotify-panel"></div>
         </section>
 
           <section class="panel panel-wide widget-panel" data-widget-id="spotlight">
@@ -116,9 +142,9 @@
             <h3 id="spotlight-title"></h3>
             <div class="panel-actions">
               <span class="panel-hint" id="spotlight-hint"></span>
-              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
               <button class="button button-compact" id="flashcard-new" type="button">Add card</button>
               <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-visible" aria-label="Remove widget">×</button>
             </div>
           </div>
           <div class="spotlight" id="spotlight"></div>
@@ -129,8 +155,8 @@
             <h3>Capture</h3>
             <div class="panel-actions">
               <span class="panel-hint">Private scratchpad</span>
-              <button class="mini-button" type="button" data-action="toggle-widget-move">Move</button>
               <button class="mini-button" type="button" data-action="toggle-widget-size">Expand</button>
+              <button class="mini-button" type="button" data-action="toggle-widget-visible" aria-label="Remove widget">×</button>
             </div>
           </div>
           <div id="capture-panel"></div>
@@ -248,8 +274,8 @@
 
         <div class="drawer-subsection hidden" id="home-calendar-section">
           <div class="drawer-section-header">
-            <h4>Home calendar</h4>
-            <span class="panel-hint">Google Calendar sync</span>
+            <h4>Calendar connection</h4>
+            <span class="panel-hint">Google Calendar sync for this workspace</span>
           </div>
           <form class="drawer-form" id="home-calendar-form">
             <label>
@@ -272,6 +298,65 @@
           </form>
           <p class="panel-hint" id="home-calendar-status">No calendar connected yet.</p>
         </div>
+      </div>
+
+      <div class="drawer-section" id="drawer-widget-section">
+        <div class="drawer-section-header">
+          <h3>Widget library</h3>
+          <span class="panel-hint">Show or hide panels</span>
+        </div>
+        <div class="drawer-form" id="widget-library-list"></div>
+      </div>
+
+      <div class="drawer-section" id="drawer-weather-section">
+        <div class="drawer-section-header">
+          <h3>Weather</h3>
+          <span class="panel-hint">Current location or default city</span>
+        </div>
+        <form class="drawer-form" id="weather-form">
+          <label class="drawer-checkbox">
+            <input id="weather-use-location" type="checkbox" />
+            <span>Use my current location when I allow it</span>
+          </label>
+          <label>
+            Default city
+            <input id="weather-city" type="text" placeholder="Chicago, IL" />
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" id="weather-save" type="submit">Save weather</button>
+            <button class="button" id="weather-fetch" type="button">Refresh now</button>
+            <button class="button button-danger" id="weather-clear" type="button">Clear saved weather</button>
+          </div>
+        </form>
+        <p class="panel-hint" id="weather-status">No weather saved yet.</p>
+      </div>
+
+      <div class="drawer-section" id="drawer-spotify-section">
+        <div class="drawer-section-header">
+          <h3>Spotify</h3>
+          <span class="panel-hint">Browser player with Spotify login</span>
+        </div>
+        <form class="drawer-form" id="spotify-form">
+          <label>
+            Client ID
+            <input id="spotify-client-id" type="text" placeholder="your Spotify app client id" />
+          </label>
+          <label>
+            Redirect URI
+            <input id="spotify-redirect-uri" type="url" placeholder="http://127.0.0.1:8010/" />
+          </label>
+          <label>
+            Player name
+            <input id="spotify-player-name" type="text" placeholder="MyAxis Spotify" />
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" id="spotify-save" type="button">Save settings</button>
+            <button class="button" id="spotify-login" type="button">Sign in</button>
+            <button class="button" id="spotify-connect" type="button">Connect player</button>
+            <button class="button button-danger" id="spotify-logout" type="button">Sign out</button>
+          </div>
+        </form>
+        <p class="panel-hint" id="spotify-status">Save your Spotify app settings first.</p>
       </div>
 
       <div class="drawer-section hidden" id="drawer-task-section">
@@ -449,6 +534,6 @@
       </div>
     </aside>
 
-    <script type="module" src="./app.js?v=20260603-2"></script>
+    <script type="module" src="./app.js?v=20260605-11"></script>
   </body>
 </html>

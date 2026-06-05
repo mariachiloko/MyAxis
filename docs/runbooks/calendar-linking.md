@@ -6,6 +6,8 @@ Link one or more calendars to a workspace.
 
 ## Current setup
 
+- The calendar widget has a `Link calendar` button that opens the calendar connection for the current workspace.
+- Workspaces can link their own calendar connections.
 - Home can sync from more than one Google calendar ID.
 - The app merges those events into the same calendar and schedule view.
 - Untimed events still become to-dos for that day.

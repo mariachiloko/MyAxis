@@ -492,6 +492,22 @@ function sanitizeWorkspaceLocalState(state) {
     next.flashcards = state.flashcards;
   }
 
+  if (state.widgetVisibility && typeof state.widgetVisibility === "object") {
+    next.widgetVisibility = state.widgetVisibility;
+  }
+
+  if (state.weatherSettings && typeof state.weatherSettings === "object") {
+    next.weatherSettings = state.weatherSettings;
+  }
+
+  if (state.weatherCache && typeof state.weatherCache === "object") {
+    next.weatherCache = state.weatherCache;
+  }
+
+  if (state.spotifySettings && typeof state.spotifySettings === "object") {
+    next.spotifySettings = state.spotifySettings;
+  }
+
   if (state.home && typeof state.home === "object") {
     next.home = state.home;
   }

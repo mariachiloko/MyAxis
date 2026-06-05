@@ -16,6 +16,8 @@ Run the app on your own machine while you build it.
 - You can switch between workspaces.
 - The widgets load without errors.
 - Local changes stay in the browser until you export them.
+- The Spotify widget asks for a client ID and redirect URI before it can connect.
+- The Spotify mini-player only works after Spotify sign-in and a Premium account.
 
 ## Private data rule
 

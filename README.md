@@ -20,6 +20,7 @@ A private-safe, Skylight-inspired dashboard for work, projects, study, and home 
 - Study flashcards geared toward project and interview prep
 - Optional Home workspace Google Calendar sync using a Google OAuth client ID and calendar ID you provide locally
 - Home calendar sync can use more than one calendar ID, separated by commas or new lines
+- Optional Spotify mini-player using Spotify PKCE login and the Web Playback SDK, which requires a Spotify Premium account
 - Optional motivational-quote endpoint for AI-generated quote text, configured locally in `config.local.js`
 - Optional cloud sync settings for the backend API URL, plus Cognito sign-in settings stored locally in the browser or `config.local.js`
 

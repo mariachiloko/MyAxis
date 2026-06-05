@@ -20,6 +20,12 @@ const STORAGE_KEYS = {
   hiddenCalendarEvents: "workspace-dashboard:hidden-calendar-events",
   calendarTodos: "workspace-dashboard:calendar-todos",
   motivationQuoteCache: "workspace-dashboard:motivation-quote-cache",
+  widgetVisibility: "workspace-dashboard:widget-visibility",
+  weatherSettings: "workspace-dashboard:weather-settings",
+  weatherCache: "workspace-dashboard:weather-cache",
+  spotifySettings: "workspace-dashboard:spotify-settings",
+  spotifySession: "workspace-dashboard:spotify-session",
+  spotifyTransaction: "workspace-dashboard:spotify-transaction",
   backendApiBaseUrl: "workspace-dashboard:backend-api-base-url",
   backendApiToken: "workspace-dashboard:backend-api-token",
   cognitoSettings: "workspace-dashboard:cognito-settings",
@@ -31,6 +37,8 @@ const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOME_MENU_SLOTS = ["Breakfast", "Lunch", "Dinner"];
 const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 const GOOGLE_GIS_SRC = "https://accounts.google.com/gsi/client";
+const SPOTIFY_SCOPES = "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state";
+const SPOTIFY_SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
 const HOME_CALENDAR_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const MOTIVATION_QUOTES = [
   "Keep the next step small and visible.",
@@ -45,15 +53,26 @@ const MOTIVATION_QUOTES = [
   "You can build this one careful piece at a time."
 ];
 const DEFAULT_LAYOUT = {
-  order: ["hero", "capture", "schedule", "calendar", "kanban", "spotlight"],
+  order: ["hero", "weather", "spotify", "capture", "schedule", "calendar", "kanban", "spotlight"],
   spans: {
     hero: 12,
+    weather: 4,
+    spotify: 4,
     capture: 6,
     schedule: 6,
     calendar: 8,
     kanban: 8,
     spotlight: 8,
   }
+};
+const DEFAULT_WIDGET_VISIBILITY = {
+  weather: true,
+  spotify: true,
+  capture: true,
+  schedule: true,
+  calendar: true,
+  kanban: true,
+  spotlight: true
 };
 const LAYOUT_SPANS = [4, 6, 8, 12];
 const LEGACY_DEFAULT_LAYOUT_ORDER = ["hero", "schedule", "calendar", "kanban", "spotlight", "goals", "capture"];
@@ -76,12 +95,30 @@ const appState = {
   editingEvent: null,
   editingStory: null,
   editingFlashcard: null,
-  widgetMoveSourceId: null,
   homeCalendarSyncInFlight: false,
   theme: getInitialTheme(),
   motivationVisible: getInitialMotivationVisibility(),
   motivationQuote: "",
   motivationQuoteRequestId: 0,
+  weatherRequestId: 0,
+  spotifyRequestId: 0,
+  spotifyPlayer: null,
+  spotifyPlayerWorkspaceId: "",
+  spotifyPlayerDeviceId: "",
+  spotifyPlayerState: null,
+  spotifyPlayerStateUpdatedAt: 0,
+  spotifyPlayerConnectingWorkspaceId: "",
+  spotifyPlayerConnectPromise: null,
+  spotifySdkReady: false,
+  spotifySdkPromise: null,
+  spotifyCurrentTrackUri: "",
+  spotifyRecommendationRequestId: 0,
+  spotifyRecommendationSeedTrackUri: "",
+  spotifyPlaybackQueue: [],
+  spotifyPlaybackQueueIndex: -1,
+  spotifyPlaybackQueueSeedTrackUri: "",
+  spotifyAutoAdvanceLock: false,
+  spotifyPlaylistAdvanceTimer: null,
   calendarView: getStoredCalendarView(),
   calendarAnchor: getStoredCalendarAnchor(),
   scheduleDay: getStoredScheduleDay(),
@@ -98,6 +135,27 @@ const calendarGridEl = document.getElementById("calendar-grid");
 const kanbanBoardEl = document.getElementById("kanban-board");
 const kanbanTitleEl = document.getElementById("kanban-title");
 const kanbanHintEl = document.getElementById("kanban-hint");
+const weatherPanelEl = document.getElementById("weather-panel");
+const weatherHintEl = document.getElementById("weather-hint");
+const weatherFormEl = document.getElementById("weather-form");
+const weatherCityEl = document.getElementById("weather-city");
+const weatherUseLocationEl = document.getElementById("weather-use-location");
+const weatherSaveEl = document.getElementById("weather-save");
+const weatherFetchEl = document.getElementById("weather-fetch");
+const weatherClearEl = document.getElementById("weather-clear");
+const weatherStatusEl = document.getElementById("weather-status");
+const widgetLibraryListEl = document.getElementById("widget-library-list");
+const spotifyPanelEl = document.getElementById("spotify-panel");
+const spotifyHintEl = document.getElementById("spotify-hint");
+const spotifyFormEl = document.getElementById("spotify-form");
+const spotifyClientIdEl = document.getElementById("spotify-client-id");
+const spotifyRedirectUriEl = document.getElementById("spotify-redirect-uri");
+const spotifyPlayerNameEl = document.getElementById("spotify-player-name");
+const spotifySaveEl = document.getElementById("spotify-save");
+const spotifyLoginEl = document.getElementById("spotify-login");
+const spotifyConnectEl = document.getElementById("spotify-connect");
+const spotifyLogoutEl = document.getElementById("spotify-logout");
+const spotifyStatusEl = document.getElementById("spotify-status");
 const spotlightEl = document.getElementById("spotlight");
 const spotlightHintEl = document.getElementById("spotlight-hint");
 const capturePanelEl = document.getElementById("capture-panel");
@@ -112,10 +170,12 @@ const motivationTileEl = document.getElementById("motivation-sticky");
 const layoutEl = document.querySelector ? document.querySelector(".layout") : null;
 const motivationQuoteEl = document.getElementById("motivation-quote");
 const settingsOpenEl = document.getElementById("settings-open");
+const widgetsOpenEl = document.getElementById("widgets-open");
 const settingsCloseEl = document.getElementById("settings-close");
 const drawerBackdropEl = document.getElementById("drawer-backdrop");
 const settingsDrawerEl = document.getElementById("settings-drawer");
 const calendarNewEl = document.getElementById("calendar-new");
+const calendarLinkEl = document.getElementById("calendar-link");
 const calendarViewWeekEl = document.getElementById("calendar-view-week");
 const calendarViewMonthEl = document.getElementById("calendar-view-month");
 const taskNewEl = document.getElementById("task-new");
@@ -144,6 +204,9 @@ const cognitoLoginEl = document.getElementById("cognito-login");
 const cognitoLogoutEl = document.getElementById("cognito-logout");
 const cognitoStatusEl = document.getElementById("cognito-status");
 const homeCalendarSectionEl = document.getElementById("home-calendar-section");
+const drawerWidgetSectionEl = document.getElementById("drawer-widget-section");
+const drawerWeatherSectionEl = document.getElementById("drawer-weather-section");
+const drawerSpotifySectionEl = document.getElementById("drawer-spotify-section");
 const drawerTaskSectionEl = document.getElementById("drawer-task-section");
 const drawerScheduleSectionEl = document.getElementById("drawer-schedule-section");
 const drawerCalendarSectionEl = document.getElementById("drawer-calendar-section");
@@ -216,6 +279,8 @@ const calendarRangeLabelEl = document.getElementById("calendar-range-label");
 const calendarRangeDetailEl = document.getElementById("calendar-range-detail");
 
 let currentDrag = null;
+let spotifyPlaybackTicker = null;
+let spotifyPlaybackTickerSnapshot = "";
 
 bootstrap();
 
@@ -238,9 +303,48 @@ function bootstrap() {
   handleCognitoRedirect().catch((error) => {
     console.warn("Unable to complete Cognito login.", error);
   });
+  handleSpotifyRedirect().catch((error) => {
+    console.warn("Unable to complete Spotify login.", error);
+  });
   hydrateBackendAccountState().catch((error) => {
     console.warn("Unable to hydrate backend state.", error);
   });
+  startSpotifyPlaybackTicker();
+}
+
+function startSpotifyPlaybackTicker() {
+  if (spotifyPlaybackTicker) {
+    return;
+  }
+
+  spotifyPlaybackTicker = window.setInterval(() => {
+    const snapshot = getSpotifyPlaybackStateSnapshot();
+    if (!snapshot || snapshot.paused || !spotifyPanelEl) {
+      return;
+    }
+    const snapshotKey = `${snapshot.track?.uri || ""}:${Math.floor(snapshot.position / 1000)}:${snapshot.duration}:${snapshot.paused ? 1 : 0}`;
+    if (snapshotKey === spotifyPlaybackTickerSnapshot) {
+      return;
+    }
+    spotifyPlaybackTickerSnapshot = snapshotKey;
+
+    const progressBar = spotifyPanelEl.querySelector(".spotify-progress-bar span");
+    const progressLabels = spotifyPanelEl.querySelectorAll(".spotify-progress-labels span");
+    const playButton = spotifyPanelEl.querySelector('[data-spotify-action="toggle-play"]');
+    if (progressBar) {
+      const progress = snapshot.duration ? Math.min(100, Math.max(0, (snapshot.position / snapshot.duration) * 100)) : 0;
+      progressBar.style.width = `${progress}%`;
+    }
+    if (progressLabels[0]) {
+      progressLabels[0].textContent = formatSpotifyDuration(snapshot.position);
+    }
+    if (progressLabels[1]) {
+      progressLabels[1].textContent = formatSpotifyDuration(snapshot.duration);
+    }
+    if (playButton) {
+      playButton.textContent = snapshot.paused ? "Play" : "Pause";
+    }
+  }, 1000);
 }
 
 function renderDate() {
@@ -267,6 +371,11 @@ function wireCalendarControls() {
   calendarViewMonthEl.addEventListener("click", () => setCalendarView("month"));
   calendarPrevEl.addEventListener("click", () => shiftCalendar(-1));
   calendarNextEl.addEventListener("click", () => shiftCalendar(1));
+  calendarLinkEl?.addEventListener("click", () => {
+    openDrawer("workspace");
+    workspaceSettingsWorkspaceEl.value = appState.workspaceId;
+    fillWorkspaceSettingsForm(appState.workspaceId);
+  });
   schedulePrevEl.addEventListener("click", () => shiftScheduleDay(-1));
   scheduleNextEl.addEventListener("click", () => shiftScheduleDay(1));
 }
@@ -311,6 +420,7 @@ function renderColumnOptions(workspaceId) {
 
 function wireDrawerControls() {
   settingsOpenEl.addEventListener("click", () => openDrawer("workspace"));
+  widgetsOpenEl?.addEventListener("click", () => openDrawer("widgets"));
   settingsCloseEl.addEventListener("click", closeDrawer);
   drawerBackdropEl.addEventListener("click", closeDrawer);
   calendarNewEl.addEventListener("click", () => openCalendarEditor("", appState.workspaceId));
@@ -362,9 +472,53 @@ function wireDrawerControls() {
   flashcardFormEl.addEventListener("submit", handleFlashcardSubmit);
   flashcardFormClearEl.addEventListener("click", () => openFlashcardEditor("", flashcardFormWorkspaceEl.value || appState.workspaceId));
   flashcardFormDeleteEl.addEventListener("click", deleteFlashcardFromEditor);
+  weatherFormEl?.addEventListener("submit", (event) => {
+    handleWeatherSubmit(event).catch((error) => {
+      console.warn("Unable to save weather settings.", error);
+    });
+  });
+  weatherFetchEl?.addEventListener("click", () => {
+    handleWeatherRefreshClick().catch((error) => {
+      console.warn("Unable to refresh weather.", error);
+      if (weatherStatusEl) {
+        weatherStatusEl.textContent = `Weather refresh failed: ${error instanceof Error ? error.message : "Unknown error"}`;
+      }
+    });
+  });
+  weatherClearEl?.addEventListener("click", handleWeatherClearClick);
+  spotifyFormEl?.addEventListener("submit", (event) => {
+    handleSpotifySubmit(event).catch((error) => {
+      console.warn("Unable to save Spotify settings.", error);
+    });
+  });
+  spotifySaveEl?.addEventListener("click", (event) => {
+    handleSpotifySubmit(event).catch((error) => {
+      console.warn("Unable to save Spotify settings.", error);
+    });
+  });
+  [spotifyClientIdEl, spotifyRedirectUriEl, spotifyPlayerNameEl].forEach((input) => {
+    input?.addEventListener("input", syncSpotifySaveButton);
+    input?.addEventListener("change", syncSpotifySaveButton);
+  });
+  spotifyLoginEl?.addEventListener("click", () => {
+    handleSpotifyLoginClick().catch((error) => {
+      console.warn("Unable to sign in to Spotify.", error);
+      updateSpotifyStatus("Spotify sign-in failed.");
+    });
+  });
+  spotifyConnectEl?.addEventListener("click", () => {
+    handleSpotifyConnectClick().catch((error) => {
+      console.warn("Unable to connect Spotify player.", error);
+      updateSpotifyStatus("Unable to connect the player.");
+    });
+  });
+  spotifyLogoutEl?.addEventListener("click", () => {
+    handleSpotifyLogoutClick();
+  });
 
   workspaceSettingsWorkspaceEl.addEventListener("change", () => {
     fillWorkspaceSettingsForm(workspaceSettingsWorkspaceEl.value);
+    fillSpotifyForm(workspaceSettingsWorkspaceEl.value);
   });
 
   taskFormWorkspaceEl.addEventListener("change", () => {
@@ -465,6 +619,8 @@ function renderWorkspace(activeWorkspace) {
   renderSchedule(activeWorkspace.schedule, mergedCalendarEvents);
   renderCalendar(mergedCalendarEvents);
   renderKanban(activeWorkspace);
+  renderWeather(activeWorkspace);
+  renderSpotify(activeWorkspace);
   renderStudyWidget(activeWorkspace);
   const spotlightPanel = spotlightEl?.closest(".widget-panel");
   if (spotlightPanel) {
@@ -477,6 +633,7 @@ function renderWorkspace(activeWorkspace) {
   refreshMotivationQuote(activeWorkspace);
   applyWidgetLayout();
   applyCaptureFollowLayout(activeWorkspace.id);
+  syncWidgetLibrary();
   syncDrawerSelections();
 }
 
@@ -821,6 +978,157 @@ function extractAIText(payload, mode) {
 function generateLocalMotivationQuote(workspace) {
   const index = Math.floor(Math.random() * MOTIVATION_QUOTES.length);
   return MOTIVATION_QUOTES[index] || "Keep the next step small and visible.";
+}
+
+function renderWeather(workspace) {
+  if (!weatherPanelEl) {
+    return;
+  }
+
+  const settings = getWeatherSettings(workspace.id);
+  const cached = getWeatherCache(workspace.id);
+  const weather = cached?.data || null;
+  weatherPanelEl.innerHTML = renderWeatherMarkup({
+    settings,
+    weather,
+    loading: Boolean(cached?.loading)
+  });
+
+  weatherPanelEl.querySelectorAll("[data-weather-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.weatherAction === "refresh") {
+        refreshWeather(workspace.id, true);
+      }
+    });
+  });
+
+  refreshWeather(workspace.id, false).catch((error) => {
+    console.warn("Unable to refresh weather.", error);
+  });
+}
+
+function renderWeatherMarkup({ settings, weather, loading }) {
+  const locationLabel = weather?.locationLabel || settings.city || "Chicago, IL";
+  const currentSummary = weather
+    ? `${weather.temperature}° ${weather.unit} · ${weather.summary}`
+    : loading
+      ? "Loading weather..."
+      : "Pick a city or use your current location.";
+  const updatedLabel = weather?.updatedAt ? `Updated ${formatRelativeSyncTime(weather.updatedAt)}` : "";
+
+  return `
+    <div class="weather-card">
+      <div class="weather-card-top">
+        <strong>${escapeHtml(locationLabel)}</strong>
+        <span class="tag-chip tag-chip--weather">${escapeHtml(settings.useLocation ? "Location" : "City")}</span>
+      </div>
+      <div class="weather-temperature">${escapeHtml(weather ? `${weather.temperature}°` : "--")}</div>
+      <p class="weather-summary">${escapeHtml(currentSummary)}</p>
+      <div class="weather-meta">
+        <span>${escapeHtml(weather?.feelsLike ? `Feels like ${weather.feelsLike}°` : "")}</span>
+        <span>${escapeHtml(updatedLabel)}</span>
+      </div>
+      <div class="weather-actions">
+        <button class="button button-compact" type="button" data-weather-action="refresh">Refresh</button>
+      </div>
+    </div>
+  `;
+}
+
+async function refreshWeather(workspaceId, force = false) {
+  const settings = getWeatherSettings(workspaceId);
+  const cache = getWeatherCache(workspaceId);
+  const cacheKey = getWeatherCacheKey(workspaceId, settings);
+  if (!force && cache?.cacheKey === cacheKey && cache?.data && Date.now() - Number(cache.updatedAt || 0) < 30 * 60 * 1000) {
+    return cache.data;
+  }
+
+  const requestId = appState.weatherRequestId + 1;
+  appState.weatherRequestId = requestId;
+
+  const location = await resolveWeatherLocation(settings);
+  if (requestId !== appState.weatherRequestId) {
+    return null;
+  }
+
+  if (!location) {
+    saveWeatherCache(workspaceId, {
+      cacheKey,
+      updatedAt: Date.now(),
+      data: null,
+      loading: false
+    });
+    renderWeather(getWorkspace(workspaceId));
+    return null;
+  }
+
+  saveWeatherCache(workspaceId, {
+    cacheKey,
+    updatedAt: Date.now(),
+    data: null,
+    loading: true
+  });
+
+  const url = new URL("https://api.open-meteo.com/v1/forecast");
+  url.searchParams.set("latitude", String(location.latitude));
+  url.searchParams.set("longitude", String(location.longitude));
+  url.searchParams.set("current", "temperature_2m,weather_code,apparent_temperature,wind_speed_10m");
+  url.searchParams.set("temperature_unit", "fahrenheit");
+  url.searchParams.set("wind_speed_unit", "mph");
+  url.searchParams.set("timezone", "auto");
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Weather request failed (${response.status})`);
+  }
+
+  const payload = await response.json();
+  const current = payload?.current || {};
+  const weather = {
+    locationLabel: location.label,
+    temperature: Math.round(Number(current.temperature_2m || current.apparent_temperature || 0)),
+    feelsLike: Math.round(Number(current.apparent_temperature || current.temperature_2m || 0)),
+    summary: getWeatherCodeLabel(current.weather_code),
+    unit: "F",
+    updatedAt: new Date().toISOString()
+  };
+
+  saveWeatherCache(workspaceId, {
+    cacheKey,
+    updatedAt: Date.now(),
+    data: weather,
+    loading: false
+  });
+  if (requestId === appState.weatherRequestId) {
+    renderWeather(getWorkspace(workspaceId));
+  }
+  return weather;
+}
+
+function getWeatherCodeLabel(code) {
+  const numeric = Number(code);
+  const labels = {
+    0: "Clear",
+    1: "Mostly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Rime fog",
+    51: "Light drizzle",
+    53: "Drizzle",
+    55: "Heavy drizzle",
+    61: "Light rain",
+    63: "Rain",
+    65: "Heavy rain",
+    71: "Light snow",
+    73: "Snow",
+    75: "Heavy snow",
+    80: "Rain showers",
+    81: "Rain showers",
+    82: "Heavy showers",
+    95: "Thunderstorms"
+  };
+  return labels[numeric] || "Weather";
 }
 
 function getMotivationQuoteStorageKey(workspaceId) {
@@ -1754,15 +2062,63 @@ function persistLayoutState() {
   localStorage.setItem(STORAGE_KEYS.layout, JSON.stringify(layoutState));
 }
 
+function getWidgetVisibilityStorageKey(workspaceId) {
+  return `${STORAGE_KEYS.widgetVisibility}:${workspaceId}`;
+}
+
+function getWidgetVisibilityState(workspaceId) {
+  const stored = readStoredJson(getWidgetVisibilityStorageKey(workspaceId), null);
+  const next = { ...DEFAULT_WIDGET_VISIBILITY };
+  if (stored && typeof stored === "object") {
+    for (const [widgetId, visible] of Object.entries(stored)) {
+      if (widgetId in next) {
+        next[widgetId] = Boolean(visible);
+      }
+    }
+  }
+  return next;
+}
+
+function saveWidgetVisibilityState(workspaceId, state) {
+  const normalized = {};
+  for (const widgetId of Object.keys(DEFAULT_WIDGET_VISIBILITY)) {
+    normalized[widgetId] = Boolean(state?.[widgetId]);
+  }
+  localStorage.setItem(getWidgetVisibilityStorageKey(workspaceId), JSON.stringify(normalized));
+  scheduleWorkspaceStateSync(workspaceId);
+}
+
+function setWidgetVisibility(workspaceId, widgetId, visible) {
+  if (!DEFAULT_WIDGET_VISIBILITY[widgetId]) {
+    return;
+  }
+  const nextState = getWidgetVisibilityState(workspaceId);
+  nextState[widgetId] = Boolean(visible);
+  saveWidgetVisibilityState(workspaceId, nextState);
+  renderWorkspace(getWorkspace(appState.workspaceId));
+}
+
+function getWidgetVisibilityLabel(widgetId) {
+  return {
+    weather: "Weather",
+    spotify: "Spotify",
+    capture: "Capture",
+    schedule: "Schedule",
+    calendar: "Calendar",
+    kanban: "Task board",
+    spotlight: "Study / stories"
+  }[widgetId] || widgetId;
+}
+
 function applyWidgetLayout() {
   if (!layoutEl) {
     return;
   }
 
   layoutState = normalizeLayoutState(layoutState);
+  const widgetVisibility = getWidgetVisibilityState(appState.workspaceId);
   const panels = Array.from(layoutEl.querySelectorAll(".widget-panel"));
   const panelById = new Map(panels.map((panel) => [panel.dataset.widgetId, panel]));
-  layoutEl.classList.toggle("is-move-mode", Boolean(appState.widgetMoveSourceId));
 
   for (const widgetId of layoutState.order) {
     const panel = panelById.get(widgetId);
@@ -1774,17 +2130,15 @@ function applyWidgetLayout() {
     panel.dataset.widgetSpan = String(layoutState.spans[widgetId] || 4);
     panel.classList.remove("span-4", "span-6", "span-8", "span-12");
     panel.classList.add(`span-${layoutState.spans[widgetId] || 4}`);
-    panel.classList.toggle("is-move-source", widgetId === appState.widgetMoveSourceId);
+    panel.classList.toggle("is-hidden", widgetVisibility[widgetId] === false);
     layoutEl.appendChild(panel);
   }
 
   for (const panel of panels) {
     panel.classList.toggle("is-dragging", false);
     panel.classList.toggle("is-drop-target", false);
-    panel.classList.toggle("is-move-source", panel.dataset.widgetId === appState.widgetMoveSourceId);
   }
 
-  updateWidgetMoveAffordances();
   updateWidgetToolbarLabels();
 }
 
@@ -1801,67 +2155,16 @@ function handleWidgetToolbarClick(event) {
 
   const widgetId = widgetPanel.dataset.widgetId;
   switch (actionButton.dataset.action) {
-    case "toggle-widget-move":
-      appState.widgetMoveSourceId = appState.widgetMoveSourceId === widgetId ? null : widgetId;
-      applyWidgetLayout();
-      break;
-    case "move-widget":
-      moveWidget(widgetId, Number.parseInt(actionButton.dataset.direction || "0", 10));
-      appState.widgetMoveSourceId = null;
-      applyWidgetLayout();
-      break;
-    case "move-widget-before":
-      moveWidgetToTarget(appState.widgetMoveSourceId, widgetId, false);
-      break;
-    case "move-widget-after":
-      moveWidgetToTarget(appState.widgetMoveSourceId, widgetId, true);
-      break;
     case "toggle-widget-size":
       toggleWidgetSize(widgetId);
+      break;
+    case "toggle-widget-visible":
+      setWidgetVisibility(appState.workspaceId, widgetId, !getWidgetVisibilityState(appState.workspaceId)[widgetId]);
+      syncWidgetLibrary();
       break;
     default:
       break;
   }
-}
-
-function moveWidget(widgetId, direction) {
-  const currentIndex = layoutState.order.indexOf(widgetId);
-  if (currentIndex === -1) {
-    return;
-  }
-
-  const nextIndex = currentIndex + direction;
-  if (nextIndex < 0 || nextIndex >= layoutState.order.length) {
-    return;
-  }
-
-  const nextOrder = [...layoutState.order];
-  const [widget] = nextOrder.splice(currentIndex, 1);
-  nextOrder.splice(nextIndex, 0, widget);
-  layoutState.order = nextOrder;
-  persistLayoutState();
-  applyWidgetLayout();
-}
-
-function moveWidgetToTarget(widgetId, targetWidgetId, insertAfter) {
-  if (!widgetId || !targetWidgetId || widgetId === targetWidgetId) {
-    return;
-  }
-
-  const currentIndex = layoutState.order.indexOf(widgetId);
-  const targetIndex = layoutState.order.indexOf(targetWidgetId);
-  if (currentIndex === -1 || targetIndex === -1) {
-    return;
-  }
-
-  const nextOrder = layoutState.order.filter((item) => item !== widgetId);
-  const baseIndex = nextOrder.indexOf(targetWidgetId);
-  const insertionIndex = baseIndex === -1 ? nextOrder.length : baseIndex + (insertAfter ? 1 : 0);
-  nextOrder.splice(insertionIndex, 0, widgetId);
-  layoutState.order = nextOrder;
-  appState.widgetMoveSourceId = null;
-  persistLayoutState();
-  applyWidgetLayout();
 }
 
 function toggleWidgetSize(widgetId) {
@@ -1889,6 +2192,7 @@ function updateWidgetToolbarLabels() {
     return;
   }
 
+  const widgetVisibility = getWidgetVisibilityState(appState.workspaceId);
   const panels = layoutEl.querySelectorAll(".widget-panel");
   panels.forEach((panel) => {
     const widgetId = panel.dataset.widgetId;
@@ -1899,44 +2203,40 @@ function updateWidgetToolbarLabels() {
       toggleButton.textContent = span === getExpandedLayoutSpan(widgetId) ? "Compact" : "Expand";
       toggleButton.disabled = widgetId === "hero";
     }
-    const moveButton = panel.querySelector('[data-action="toggle-widget-move"]');
-    if (moveButton) {
-      moveButton.textContent = appState.widgetMoveSourceId === widgetId ? "Cancel move" : "Move";
-      moveButton.disabled = widgetId === "hero";
+    const visibilityButton = panel.querySelector('[data-action="toggle-widget-visible"]');
+    if (visibilityButton) {
+      visibilityButton.textContent = "×";
+      visibilityButton.setAttribute("aria-label", `${widgetVisibility[widgetId] === false ? "Show" : "Remove"} ${getWidgetVisibilityLabel(widgetId)} widget`);
+      visibilityButton.setAttribute("title", `${widgetVisibility[widgetId] === false ? "Show" : "Remove"} ${getWidgetVisibilityLabel(widgetId)} widget`);
+      visibilityButton.disabled = widgetId === "hero";
     }
-    const moveTargets = panel.querySelectorAll('[data-action="move-widget-before"], [data-action="move-widget-after"]');
-    moveTargets.forEach((button) => {
-      const sourceId = appState.widgetMoveSourceId;
-      const isTarget = Boolean(sourceId) && sourceId !== widgetId;
-      button.disabled = !isTarget;
-    });
   });
 }
 
-function updateWidgetMoveAffordances() {
-  if (!layoutEl) {
+function syncWidgetLibrary() {
+  if (!widgetLibraryListEl) {
     return;
   }
 
-  const sourceId = appState.widgetMoveSourceId;
-  layoutEl.querySelectorAll(".widget-panel").forEach((panel) => {
-    const widgetId = panel.dataset.widgetId;
-    let rail = panel.querySelector(".widget-move-rail");
-    if (rail) {
-      rail.remove();
-    }
+  const workspaceId = appState.workspaceId;
+  const visibility = getWidgetVisibilityState(workspaceId);
+  widgetLibraryListEl.innerHTML = Object.keys(DEFAULT_WIDGET_VISIBILITY)
+    .map((widgetId) => {
+      const checked = visibility[widgetId] !== false;
+      return `
+        <label class="drawer-checkbox widget-library-item">
+          <input type="checkbox" data-widget-library-toggle="${escapeHtml(widgetId)}" ${checked ? "checked" : ""} />
+          <span>${escapeHtml(getWidgetVisibilityLabel(widgetId))}</span>
+        </label>
+      `;
+    })
+    .join("");
 
-    if (!sourceId || sourceId === widgetId) {
-      return;
-    }
-
-    rail = document.createElement("div");
-    rail.className = "widget-move-rail";
-    rail.innerHTML = `
-      <button class="button button-compact widget-move-arrow" type="button" data-action="move-widget-before" aria-label="Move before ${escapeHtml(widgetId)}">← Before</button>
-      <button class="button button-compact widget-move-arrow" type="button" data-action="move-widget-after" aria-label="Move after ${escapeHtml(widgetId)}">After →</button>
-    `;
-    panel.appendChild(rail);
+  widgetLibraryListEl.querySelectorAll("[data-widget-library-toggle]").forEach((input) => {
+    input.addEventListener("change", () => {
+      setWidgetVisibility(workspaceId, input.dataset.widgetLibraryToggle, Boolean(input.checked));
+      syncWidgetLibrary();
+    });
   });
 }
 
@@ -2735,6 +3035,8 @@ function syncDrawerSelections() {
   fillWorkspaceSettingsForm(workspaceSettingsWorkspaceEl.value || appState.workspaceId);
   fillBackendSyncForm();
   fillCognitoSettingsForm();
+  fillWeatherForm(getDrawerWorkspaceId());
+  fillSpotifyForm(getDrawerWorkspaceId());
   if (appState.drawerMode === "workspace") {
     return;
   }
@@ -2768,19 +3070,29 @@ function syncDrawerSelections() {
 function syncDrawerMode() {
   const mode = appState.drawerMode;
   const isWorkspace = mode === "workspace" || mode === "settings";
+  const isWidgets = mode === "widgets";
   const isTask = mode === "task";
   const isSchedule = mode === "schedule";
   const isCalendar = mode === "calendar";
   const isStory = mode === "story";
   const isFlashcard = mode === "flashcard";
 
-  drawerTitleEl.textContent = isWorkspace ? "Workspace settings" : isTask ? "Task editor" : isSchedule ? "Schedule editor" : isCalendar ? "Calendar editor" : isStory ? "Work story editor" : "Flashcard editor";
+  drawerTitleEl.textContent = isWorkspace ? "Workspace settings" : isWidgets ? "Widgets" : isTask ? "Task editor" : isSchedule ? "Schedule editor" : isCalendar ? "Calendar editor" : isStory ? "Work story editor" : "Flashcard editor";
   drawerWorkspaceSectionEl.classList.toggle("hidden", !isWorkspace);
   drawerTaskSectionEl.classList.toggle("hidden", !isTask);
   drawerScheduleSectionEl.classList.toggle("hidden", !isSchedule);
   drawerCalendarSectionEl.classList.toggle("hidden", !isCalendar);
   drawerStorySectionEl.classList.toggle("hidden", !isStory);
   drawerFlashcardSectionEl.classList.toggle("hidden", !isFlashcard);
+  if (drawerWidgetSectionEl) {
+    drawerWidgetSectionEl.classList.toggle("hidden", !(isWorkspace || isWidgets));
+  }
+  if (drawerWeatherSectionEl) {
+    drawerWeatherSectionEl.classList.toggle("hidden", !(isWorkspace || isWidgets));
+  }
+  if (drawerSpotifySectionEl) {
+    drawerSpotifySectionEl.classList.toggle("hidden", !(isWorkspace || isWidgets));
+  }
 }
 
 function fillWorkspaceSettingsForm(workspaceId) {
@@ -2793,6 +3105,1553 @@ function fillWorkspaceSettingsForm(workspaceId) {
   workspaceSettingsAccent2El.value = normalizeHexColor(workspace.accent2 || defaultConfig.workspaces[0].accent2);
   workspaceSettingsDefaultEl.value = config.defaultWorkspace || defaultConfig.defaultWorkspace || config.workspaces[0].id;
   syncHomeCalendarSection(workspace);
+  fillWeatherForm(workspace.id);
+  fillSpotifyForm(workspace.id);
+}
+
+function getDrawerWorkspaceId() {
+  return workspaceSettingsWorkspaceEl?.value || appState.workspaceId;
+}
+
+function fillWeatherForm(workspaceId) {
+  if (!weatherFormEl) {
+    return;
+  }
+
+  const settings = getWeatherSettings(workspaceId);
+  if (weatherCityEl) {
+    weatherCityEl.value = settings.city || "Chicago, IL";
+  }
+  if (weatherUseLocationEl) {
+    weatherUseLocationEl.checked = Boolean(settings.useLocation);
+  }
+  if (weatherStatusEl) {
+    const cache = getWeatherCache(workspaceId);
+    const updatedAt = cache?.data?.updatedAt || cache?.updatedAt || "";
+    const updatedLabel = updatedAt ? `Updated ${formatRelativeSyncTime(updatedAt)}` : "";
+    weatherStatusEl.textContent = settings.useLocation
+      ? updatedLabel
+        ? `Using current location when allowed. ${updatedLabel}.`
+        : "Using current location when allowed."
+      : updatedLabel
+        ? `Showing weather for ${settings.city || "Chicago, IL"}. ${updatedLabel}.`
+        : `Showing weather for ${settings.city || "Chicago, IL"}.`;
+  }
+}
+
+function getWeatherFormState() {
+  return {
+    useLocation: Boolean(weatherUseLocationEl?.checked),
+    city: String(weatherCityEl?.value || "Chicago, IL").trim() || "Chicago, IL"
+  };
+}
+
+async function handleWeatherSubmit(event) {
+  event?.preventDefault?.();
+  const workspaceId = getDrawerWorkspaceId();
+  const settings = getWeatherFormState();
+  saveWeatherSettings(workspaceId, settings);
+  fillWeatherForm(workspaceId);
+  await refreshWeather(workspaceId, true);
+}
+
+async function handleWeatherRefreshClick() {
+  const workspaceId = getDrawerWorkspaceId();
+  const settings = getWeatherFormState();
+  saveWeatherSettings(workspaceId, settings);
+  fillWeatherForm(workspaceId);
+  await refreshWeather(workspaceId, true);
+}
+
+function handleWeatherClearClick() {
+  const workspaceId = getDrawerWorkspaceId();
+  localStorage.removeItem(getWeatherSettingsStorageKey(workspaceId));
+  clearWeatherCache(workspaceId);
+  fillWeatherForm(workspaceId);
+  renderWorkspace(getWorkspace(appState.workspaceId));
+}
+
+function getSpotifySettingsStorageKey() {
+  return STORAGE_KEYS.spotifySettings;
+}
+
+function getLegacySpotifySettingsStorageKey(workspaceId) {
+  return `${STORAGE_KEYS.spotifySettings}:${workspaceId}`;
+}
+
+function getSpotifySettings(workspaceId) {
+  const stored = readStoredJson(getSpotifySettingsStorageKey(), null) || readStoredJson(getLegacySpotifySettingsStorageKey(workspaceId), null) || {};
+  if (!readStoredJson(getSpotifySettingsStorageKey(), null) && Object.keys(stored).length) {
+    localStorage.setItem(getSpotifySettingsStorageKey(), JSON.stringify({
+      clientId: String(stored.clientId || "").trim(),
+      redirectUri: String(stored.redirectUri || "").trim(),
+      playerName: String(stored.playerName || "").trim()
+    }));
+  }
+  const workspace = getWorkspace(workspaceId);
+  const fallbackRedirectUri = `${window.location.origin}/`;
+  return {
+    clientId: String(stored.clientId || "").trim(),
+    redirectUri: String(stored.redirectUri || fallbackRedirectUri).trim() || fallbackRedirectUri,
+    playerName: String(stored.playerName || `${workspace.label || workspace.id} Spotify`).trim() || `${workspace.label || workspace.id} Spotify`
+  };
+}
+
+function saveSpotifySettings(workspaceId, settings) {
+  const nextSettings = {
+    clientId: String(settings?.clientId || "").trim(),
+    redirectUri: String(settings?.redirectUri || "").trim() || `${window.location.origin}/`,
+    playerName: String(settings?.playerName || "").trim() || "MyAxis Spotify"
+  };
+  localStorage.setItem(getSpotifySettingsStorageKey(), JSON.stringify(nextSettings));
+  scheduleWorkspaceStateSync(workspaceId);
+}
+
+function clearSpotifySettings(workspaceId) {
+  localStorage.removeItem(getSpotifySettingsStorageKey());
+  localStorage.removeItem(getLegacySpotifySettingsStorageKey(workspaceId));
+  clearSpotifySession();
+  scheduleWorkspaceStateSync(workspaceId);
+}
+
+function fillSpotifyForm(workspaceId) {
+  if (!spotifyFormEl) {
+    return;
+  }
+
+  const settings = getSpotifySettings(workspaceId);
+  const fallbackRedirect = `${window.location.origin}/`;
+  if (spotifyClientIdEl) {
+    spotifyClientIdEl.value = settings.clientId || "";
+  }
+  if (spotifyRedirectUriEl) {
+    spotifyRedirectUriEl.value = settings.redirectUri || (fallbackRedirect.includes("localhost") ? "http://127.0.0.1:8000/" : fallbackRedirect);
+  }
+  if (spotifyPlayerNameEl) {
+    spotifyPlayerNameEl.value = settings.playerName || "MyAxis Spotify";
+  }
+  if (spotifySaveEl) {
+    spotifySaveEl.disabled = false;
+  }
+  syncSpotifySaveButton();
+  updateSpotifyStatus();
+}
+
+function syncSpotifySaveButton() {
+  if (!spotifySaveEl) {
+    return;
+  }
+
+  spotifySaveEl.disabled = false;
+  const settings = getSpotifyFormState();
+  spotifySaveEl.title = settings.clientId && settings.redirectUri ? "Save Spotify settings" : "Save Spotify settings first, then sign in.";
+  spotifySaveEl.setAttribute("aria-label", settings.clientId && settings.redirectUri ? "Save Spotify settings" : "Save Spotify settings first, then sign in.");
+}
+
+function getSpotifyFormState() {
+  return {
+    clientId: String(spotifyClientIdEl?.value || "").trim(),
+    redirectUri: String(spotifyRedirectUriEl?.value || "").trim(),
+    playerName: String(spotifyPlayerNameEl?.value || "").trim()
+  };
+}
+
+async function handleSpotifySubmit(event) {
+  event?.preventDefault?.();
+  const workspaceId = getDrawerWorkspaceId();
+  const settings = getSpotifyFormState();
+  settings.redirectUri = normalizeSpotifyRedirectUri(settings.redirectUri);
+  saveSpotifySettings(workspaceId, settings);
+  fillSpotifyForm(workspaceId);
+  updateSpotifyStatus("Spotify settings saved locally. Click Sign in next.");
+  renderWorkspace(getWorkspace(appState.workspaceId));
+}
+
+function normalizeSpotifyRedirectUri(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "localhost") {
+      url.hostname = "127.0.0.1";
+    }
+    return `${url.origin}${url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`}`;
+  } catch {
+    return raw.includes("localhost") ? raw.replace("localhost", "127.0.0.1") : raw;
+  }
+}
+
+function updateSpotifyStatus(message = "") {
+  if (!spotifyStatusEl) {
+    return;
+  }
+
+  if (message) {
+    spotifyStatusEl.textContent = message;
+    return;
+  }
+
+  const workspaceId = getDrawerWorkspaceId();
+  const settings = getSpotifySettings(workspaceId);
+  const session = getSpotifySession();
+  if (!settings.clientId || !settings.redirectUri) {
+    spotifyStatusEl.textContent = "Save your Spotify app client ID and redirect URI first.";
+    return;
+  }
+
+  if (!session?.accessToken) {
+    spotifyStatusEl.textContent = "Sign in with Spotify to connect the browser player.";
+    return;
+  }
+
+  if (session.product && session.product !== "premium") {
+    spotifyStatusEl.textContent = "Spotify Premium is required for the browser player.";
+    return;
+  }
+
+  if (appState.spotifyPlayerDeviceId) {
+    spotifyStatusEl.textContent = session.displayName
+      ? `Connected as ${session.displayName}.`
+      : "Spotify player connected.";
+    return;
+  }
+
+  spotifyStatusEl.textContent = session.displayName
+    ? `Signed in as ${session.displayName}. Starting the player.`
+    : "Signed in. Starting the player.";
+}
+
+function getSpotifySessionStorageKey() {
+  return STORAGE_KEYS.spotifySession;
+}
+
+function getSpotifyTransactionStorageKey() {
+  return STORAGE_KEYS.spotifyTransaction;
+}
+
+function getSpotifySession() {
+  const stored = readStoredJson(getSpotifySessionStorageKey(), null);
+  return normalizeSpotifySession(stored);
+}
+
+function saveSpotifySession(session) {
+  localStorage.setItem(getSpotifySessionStorageKey(), JSON.stringify(normalizeSpotifySession(session)));
+}
+
+function clearSpotifySession() {
+  localStorage.removeItem(getSpotifySessionStorageKey());
+  disconnectSpotifyPlayer(appState.spotifyPlayerWorkspaceId || appState.workspaceId);
+}
+
+function getSpotifyTransaction() {
+  const stored = readStoredJson(getSpotifyTransactionStorageKey(), null);
+  if (!stored || typeof stored !== "object") {
+    return null;
+  }
+
+  return {
+    workspaceId: String(stored.workspaceId || "").trim(),
+    state: String(stored.state || "").trim(),
+    codeVerifier: String(stored.codeVerifier || "").trim(),
+    createdAt: Number(stored.createdAt || 0)
+  };
+}
+
+function saveSpotifyTransaction(transaction) {
+  localStorage.setItem(getSpotifyTransactionStorageKey(), JSON.stringify({
+    workspaceId: String(transaction?.workspaceId || "").trim(),
+    state: String(transaction?.state || "").trim(),
+    codeVerifier: String(transaction?.codeVerifier || "").trim(),
+    createdAt: Number(transaction?.createdAt || Date.now())
+  }));
+}
+
+function clearSpotifyTransaction() {
+  localStorage.removeItem(getSpotifyTransactionStorageKey());
+}
+
+function normalizeSpotifySession(session) {
+  if (!session || typeof session !== "object") {
+    return {
+      accessToken: "",
+      refreshToken: "",
+      expiresAt: 0,
+      tokenType: "Bearer",
+      scope: "",
+      userId: "",
+      displayName: "",
+      product: "",
+      country: "",
+      imageUrl: "",
+      lastError: ""
+    };
+  }
+
+  return {
+    accessToken: String(session.accessToken || session.access_token || "").trim(),
+    refreshToken: String(session.refreshToken || session.refresh_token || "").trim(),
+    expiresAt: Number(session.expiresAt || session.expires_at || 0),
+    tokenType: String(session.tokenType || session.token_type || "Bearer").trim(),
+    scope: String(session.scope || "").trim(),
+    userId: String(session.userId || session.id || "").trim(),
+    displayName: String(session.displayName || session.display_name || session.name || "").trim(),
+    product: String(session.product || "").trim(),
+    country: String(session.country || "").trim(),
+    imageUrl: String(session.imageUrl || session.image_url || "").trim(),
+    lastError: String(session.lastError || "").trim()
+  };
+}
+
+function normalizeSpotifyPlayerState(state) {
+  if (!state) {
+    return null;
+  }
+
+  const track = state.track_window?.current_track || null;
+  const artists = Array.isArray(track?.artists) ? track.artists.map((artist) => String(artist?.name || "").trim()).filter(Boolean) : [];
+  const images = Array.isArray(track?.album?.images) ? track.album.images : [];
+  const art = images[0]?.url || "";
+  return {
+    paused: Boolean(state.paused),
+    position: Number(state.position || 0),
+    duration: Number(state.duration || track?.duration_ms || 0),
+    track: track ? {
+      name: String(track.name || "").trim(),
+      artists,
+      album: String(track.album?.name || "").trim(),
+      imageUrl: String(art || "").trim(),
+      uri: String(track.uri || "").trim()
+    } : null
+  };
+}
+
+function setSpotifyPlayerState(state) {
+  appState.spotifyPlayerState = normalizeSpotifyPlayerState(state);
+  appState.spotifyPlayerStateUpdatedAt = Date.now();
+}
+
+function getSpotifyPlaybackStateSnapshot() {
+  const state = appState.spotifyPlayerState;
+  if (!state) {
+    return null;
+  }
+
+  const updatedAt = Number(appState.spotifyPlayerStateUpdatedAt || 0);
+  const elapsed = state.paused || !updatedAt ? 0 : Math.max(0, Date.now() - updatedAt);
+  const position = Math.min(state.duration || 0, Math.max(0, Number(state.position || 0) + elapsed));
+
+  return {
+    ...state,
+    position
+  };
+}
+
+function updateSpotifyPlayerState(patch = {}) {
+  appState.spotifyPlayerState = {
+    ...(appState.spotifyPlayerState || {}),
+    ...patch
+  };
+  appState.spotifyPlayerStateUpdatedAt = Date.now();
+  renderSpotify(getWorkspace(appState.workspaceId));
+}
+
+function disconnectSpotifyPlayer(workspaceId) {
+  clearSpotifyPlaylistAdvanceTimer();
+  if (appState.spotifyPlayer && appState.spotifyPlayerWorkspaceId === workspaceId) {
+    try {
+      appState.spotifyPlayer.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+
+  appState.spotifyPlayer = null;
+  appState.spotifyPlayerWorkspaceId = "";
+  appState.spotifyPlayerDeviceId = "";
+  appState.spotifyPlayerState = null;
+  appState.spotifyPlayerStateUpdatedAt = 0;
+  appState.spotifyPlayerConnectingWorkspaceId = "";
+  appState.spotifyPlayerConnectPromise = null;
+  appState.spotifyPlaybackQueue = [];
+  appState.spotifyPlaybackQueueIndex = -1;
+  appState.spotifyPlaybackQueueSeedTrackUri = "";
+}
+
+function clearSpotifyPlaylistAdvanceTimer() {
+  if (appState.spotifyPlaylistAdvanceTimer) {
+    window.clearTimeout(appState.spotifyPlaylistAdvanceTimer);
+    appState.spotifyPlaylistAdvanceTimer = null;
+  }
+}
+
+function clearSpotifyPlaylistViewState() {
+  clearSpotifyPlaylistAdvanceTimer();
+}
+
+async function queueSpotifyRecommendations(workspaceId, seedTrackUri) {
+  const seed = typeof seedTrackUri === "object" && seedTrackUri ? seedTrackUri : { uri: seedTrackUri };
+  const trackUri = String(seed.uri || "").trim();
+  if (!trackUri) {
+    return [];
+  }
+
+  const requestId = appState.spotifyRecommendationRequestId + 1;
+  appState.spotifyRecommendationRequestId = requestId;
+  appState.spotifyRecommendationSeedTrackUri = trackUri;
+
+  try {
+    const params = new URLSearchParams({
+      limit: "10",
+      seed_tracks: trackUri,
+      market: "from_token"
+    });
+    const payload = await spotifyPlayerApiRequest(workspaceId, `/v1/recommendations?${params.toString()}`);
+    if (requestId !== appState.spotifyRecommendationRequestId) {
+      return [];
+    }
+    let tracks = Array.isArray(payload?.tracks)
+      ? payload.tracks.map(normalizeSpotifyTrack).filter((track) => track.uri && track.uri !== trackUri)
+      : [];
+    if (!tracks.length && Array.isArray(seed.artists) && seed.artists.length) {
+      tracks = await fetchSpotifyFallbackTracks(workspaceId, seed);
+    }
+    return tracks;
+  } catch (error) {
+    console.warn("Unable to load Spotify recommendations.", error);
+    return [];
+  }
+}
+
+async function fetchSpotifyFallbackTracks(workspaceId, seedTrack) {
+  const seed = typeof seedTrack === "object" && seedTrack ? seedTrack : { uri: seedTrack };
+  const artist = String(Array.isArray(seed.artists) ? seed.artists[0] : "").trim();
+  const title = String(seed.name || "").trim();
+  const queries = [
+    artist ? `artist:${artist}` : "",
+    title ? `${title} ${artist}`.trim() : "",
+    title ? title : ""
+  ].filter(Boolean);
+
+  for (const query of queries) {
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        type: "track",
+        limit: "10",
+        market: "from_token"
+      });
+      const payload = await spotifyPlayerApiRequest(workspaceId, `/v1/search?${params.toString()}`);
+      const tracks = Array.isArray(payload?.tracks?.items)
+        ? payload.tracks.items.map(normalizeSpotifyTrack).filter((track) => track.uri && track.uri !== String(seed.uri || "").trim())
+        : [];
+      if (tracks.length) {
+        return tracks;
+      }
+    } catch (error) {
+      console.warn("Unable to load Spotify fallback tracks.", error);
+    }
+  }
+
+  return [];
+}
+
+function dedupeSpotifyQueueTracks(tracks, currentTrackUri = "") {
+  const seen = new Set();
+  const current = String(currentTrackUri || "").trim();
+  const queue = [];
+  for (const track of Array.isArray(tracks) ? tracks : []) {
+    const uri = String(track?.uri || "").trim();
+    if (!uri || seen.has(uri) || uri === current) {
+      continue;
+    }
+    seen.add(uri);
+    queue.push(track);
+  }
+  return queue;
+}
+
+async function prepareSpotifyPlaybackQueue(workspaceId, seedTrackUri) {
+  const seed = typeof seedTrackUri === "object" && seedTrackUri ? seedTrackUri : { uri: seedTrackUri };
+  const trackUri = String(seed.uri || "").trim();
+  if (!trackUri) {
+    return [];
+  }
+
+  const recommendations = await queueSpotifyRecommendations(workspaceId, seed);
+  const queue = dedupeSpotifyQueueTracks([
+    normalizeSpotifyTrack({
+      uri: trackUri,
+      name: String(seed.name || "").trim(),
+      artists: Array.isArray(seed.artists) ? seed.artists.map((artist) => ({ name: String(artist || "").trim() })) : [],
+      album: String(seed.album || "").trim(),
+      images: seed.imageUrl ? [{ url: String(seed.imageUrl || "").trim() }] : [],
+      duration_ms: Number(seed.duration || 0)
+    }),
+    ...recommendations
+  ], "");
+  appState.spotifyPlaybackQueue = queue;
+  appState.spotifyPlaybackQueueIndex = queue.findIndex((item) => item.uri === trackUri);
+  if (appState.spotifyPlaybackQueueIndex < 0) {
+    appState.spotifyPlaybackQueueIndex = 0;
+  }
+  appState.spotifyPlaybackQueueSeedTrackUri = trackUri;
+  return queue;
+}
+
+async function extendSpotifyPlaybackQueue(workspaceId, seedTrackUri) {
+  const seed = typeof seedTrackUri === "object" && seedTrackUri ? seedTrackUri : { uri: seedTrackUri };
+  const trackUri = String(seed.uri || "").trim();
+  if (!trackUri) {
+    return [];
+  }
+
+  const recommendations = await queueSpotifyRecommendations(workspaceId, seed);
+  const existingUris = new Set(appState.spotifyPlaybackQueue.map((track) => String(track?.uri || "").trim()).filter(Boolean));
+  const additions = recommendations.filter((track) => track.uri && !existingUris.has(track.uri));
+  if (additions.length) {
+    appState.spotifyPlaybackQueue = dedupeSpotifyQueueTracks([...appState.spotifyPlaybackQueue, ...additions]);
+  }
+  return additions;
+}
+
+async function resolveSpotifyNextTrackCandidate(workspaceId, currentTrack, direction = 1) {
+  const seed = typeof currentTrack === "object" && currentTrack ? currentTrack : { uri: currentTrack };
+  const currentUri = String(seed.uri || "").trim();
+  if (!currentUri) {
+    return null;
+  }
+
+  if (!appState.spotifyPlaybackQueue.length) {
+    await prepareSpotifyPlaybackQueue(workspaceId, seed);
+  }
+
+  const currentIndex = Math.max(0, appState.spotifyPlaybackQueue.findIndex((track) => String(track?.uri || "").trim() === currentUri));
+  appState.spotifyPlaybackQueueIndex = currentIndex;
+
+  let targetIndex = currentIndex + Number(direction || 1);
+  if (direction < 0 && targetIndex < 0) {
+    targetIndex = 0;
+  }
+
+  let nextTrack = appState.spotifyPlaybackQueue[targetIndex] || null;
+
+  if (!nextTrack?.uri && direction > 0) {
+    await extendSpotifyPlaybackQueue(workspaceId, seed);
+    nextTrack = appState.spotifyPlaybackQueue[targetIndex] || null;
+  }
+
+  if (!nextTrack?.uri) {
+    const fallbackTracks = await fetchSpotifyFallbackTracks(workspaceId, seed);
+    const existingUris = new Set(appState.spotifyPlaybackQueue.map((track) => String(track?.uri || "").trim()).filter(Boolean));
+    const fallbackTrack = fallbackTracks.find((track) => track.uri && !existingUris.has(track.uri)) || null;
+    if (fallbackTrack?.uri) {
+      appState.spotifyPlaybackQueue = dedupeSpotifyQueueTracks([...appState.spotifyPlaybackQueue, fallbackTrack]);
+      nextTrack = fallbackTrack;
+    }
+  }
+
+  return nextTrack;
+}
+
+function getSpotifyQueueCurrentTrack() {
+  return appState.spotifyPlaybackQueue[appState.spotifyPlaybackQueueIndex] || null;
+}
+
+function scheduleSpotifyPlaybackAdvance(workspaceId) {
+  clearSpotifyPlaylistAdvanceTimer();
+  const state = appState.spotifyPlayerState;
+  if (!state || state.paused || !state.track?.uri) {
+    return;
+  }
+
+  const remaining = Math.max(0, Number(state.duration || 0) - Number(state.position || 0));
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    return;
+  }
+
+  const delay = Math.max(250, remaining + 120);
+  appState.spotifyPlaylistAdvanceTimer = window.setTimeout(() => {
+    advanceSpotifyPlaybackQueue(workspaceId, 1).catch((error) => {
+      console.warn("Unable to auto-advance Spotify playback.", error);
+    });
+  }, delay);
+}
+
+async function disableSpotifyPlaybackModes(workspaceId) {
+  if (!appState.spotifyPlayerDeviceId) {
+    return;
+  }
+
+  try {
+    await spotifyPlayerApiRequest(workspaceId, `/v1/me/player/repeat?state=off&device_id=${encodeURIComponent(appState.spotifyPlayerDeviceId)}`, {
+      method: "PUT"
+    });
+  } catch (error) {
+    console.warn("Unable to disable Spotify repeat.", error);
+  }
+
+  try {
+    await spotifyPlayerApiRequest(workspaceId, `/v1/me/player/shuffle?state=false&device_id=${encodeURIComponent(appState.spotifyPlayerDeviceId)}`, {
+      method: "PUT"
+    });
+  } catch (error) {
+    console.warn("Unable to disable Spotify shuffle.", error);
+  }
+}
+
+async function playSpotifyTrackUri(workspaceId, trackUri) {
+  const uri = String(trackUri || "").trim();
+  if (!uri) {
+    return;
+  }
+
+  const player = await ensureSpotifyPlayer(workspaceId, true);
+  if (!player) {
+    return;
+  }
+
+  await transferSpotifyPlayback(workspaceId, appState.spotifyPlayerDeviceId);
+  await disableSpotifyPlaybackModes(workspaceId);
+  await spotifyPlayerApiRequest(workspaceId, "/v1/me/player/play", {
+    method: "PUT",
+    body: { uris: [uri] }
+  });
+  await new Promise((resolve) => window.setTimeout(resolve, 350));
+  const currentState = await player.getCurrentState().catch(() => null);
+  setSpotifyPlayerState(currentState);
+  const actualTrackUri = String(appState.spotifyPlayerState?.track?.uri || uri).trim();
+  appState.spotifyCurrentTrackUri = actualTrackUri;
+  renderSpotify(getWorkspace(workspaceId));
+}
+
+async function advanceSpotifyPlaybackQueue(workspaceId, direction = 1) {
+  const player = await ensureSpotifyPlayer(workspaceId, true);
+  if (!player) {
+    return;
+  }
+
+  const currentState = await player.getCurrentState().catch(() => null);
+  setSpotifyPlayerState(currentState);
+
+  const currentTrack = appState.spotifyPlayerState?.track || getSpotifyQueueCurrentTrack();
+  const currentTrackUri = String(currentTrack?.uri || "").trim();
+  if (!currentTrackUri) {
+    return;
+  }
+
+  const nextTrack = await resolveSpotifyNextTrackCandidate(workspaceId, currentTrack, direction);
+  if (!nextTrack?.uri) {
+    return;
+  }
+
+  appState.spotifyPlaybackQueueIndex = appState.spotifyPlaybackQueue.findIndex((track) => String(track?.uri || "").trim() === nextTrack.uri);
+  if (appState.spotifyPlaybackQueueIndex < 0) {
+    appState.spotifyPlaybackQueueIndex = 0;
+  }
+  await playSpotifyTrackUri(workspaceId, nextTrack.uri);
+}
+
+function loadSpotifySdk() {
+  if (window.Spotify?.Player) {
+    appState.spotifySdkReady = true;
+    return Promise.resolve();
+  }
+
+  if (appState.spotifySdkPromise) {
+    return appState.spotifySdkPromise;
+  }
+
+  appState.spotifySdkPromise = new Promise((resolve, reject) => {
+    const onReady = () => {
+      appState.spotifySdkReady = true;
+      resolve();
+    };
+
+    if (window.Spotify?.Player) {
+      onReady();
+      return;
+    }
+
+    window.onSpotifyWebPlaybackSDKReady = onReady;
+    const existingScript = document.querySelector(`script[src="${SPOTIFY_SDK_SRC}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("error", () => reject(new Error("Unable to load the Spotify player.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = SPOTIFY_SDK_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => reject(new Error("Unable to load the Spotify player."));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    appState.spotifySdkPromise = null;
+    throw error;
+  });
+
+  return appState.spotifySdkPromise;
+}
+
+async function handleSpotifyRedirect() {
+  const url = new URL(window.location.href);
+  const error = url.searchParams.get("error");
+  const errorDescription = url.searchParams.get("error_description");
+  if (error) {
+    const message = errorDescription || error;
+    updateSpotifyStatus(`Spotify sign-in failed: ${message}`);
+    window.alert(`Spotify sign-in failed: ${message}`);
+    return;
+  }
+
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  if (!code || !state) {
+    await maybeRefreshSpotifySession(getDrawerWorkspaceId() || appState.workspaceId).catch(() => null);
+    return;
+  }
+
+  const transaction = getSpotifyTransaction();
+  if (!transaction || transaction.state !== state) {
+    window.alert("That Spotify sign-in session could not be verified. Try again.");
+    return;
+  }
+
+  const workspaceId = transaction.workspaceId || appState.workspaceId;
+  const settings = getSpotifySettings(workspaceId);
+  const session = await exchangeSpotifyCodeForSession(settings, code, transaction.codeVerifier);
+  saveSpotifySession(session);
+  clearSpotifyTransaction();
+  url.search = "";
+  window.history.replaceState({}, document.title, url.toString());
+  fillSpotifyForm(workspaceId);
+  updateSpotifyStatus(`Signed in as ${session.displayName || "Spotify user"}.`);
+  if (workspaceId === appState.workspaceId) {
+    renderSpotify(getWorkspace(workspaceId));
+  }
+}
+
+async function handleSpotifyLoginClick() {
+  const workspaceId = getDrawerWorkspaceId();
+  const settings = getSpotifySettings(workspaceId);
+  if (!settings.clientId || !settings.redirectUri) {
+    window.alert("Fill out the Spotify client ID and redirect URI first.");
+    return;
+  }
+
+  saveSpotifySettings(workspaceId, settings);
+  const transaction = await createSpotifyTransaction();
+  saveSpotifyTransaction({
+    ...transaction,
+    workspaceId
+  });
+
+  const authorizeUrl = new URL("https://accounts.spotify.com/authorize");
+  authorizeUrl.searchParams.set("client_id", settings.clientId);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("redirect_uri", settings.redirectUri);
+  authorizeUrl.searchParams.set("state", transaction.state);
+  authorizeUrl.searchParams.set("code_challenge", transaction.codeChallenge);
+  authorizeUrl.searchParams.set("code_challenge_method", "S256");
+  authorizeUrl.searchParams.set("scope", SPOTIFY_SCOPES);
+  authorizeUrl.searchParams.set("show_dialog", "true");
+  authorizeUrl.searchParams.set("prompt", "consent");
+  window.location.assign(authorizeUrl.toString());
+}
+
+async function forceSpotifyReauth() {
+  clearSpotifySession();
+  clearSpotifyTransaction();
+  saveSpotifyLibraryState({
+    items: [],
+    loading: false,
+    error: "",
+    loadedForUserId: ""
+  });
+  clearSpotifyPlaylistViewState();
+  clearSpotifySearchState();
+  await handleSpotifyLoginClick();
+}
+
+async function handleSpotifyConnectClick() {
+  const workspaceId = getDrawerWorkspaceId();
+  await ensureSpotifyPlayer(workspaceId, true);
+  if (workspaceId === appState.workspaceId) {
+    renderSpotify(getWorkspace(workspaceId));
+  }
+}
+
+function handleSpotifyLogoutClick() {
+  const workspaceId = getDrawerWorkspaceId();
+  clearSpotifySession();
+  clearSpotifyTransaction();
+  updateSpotifyPlayerState({
+    paused: true,
+    track: null,
+    position: 0,
+    duration: 0
+  });
+  fillSpotifyForm(workspaceId);
+  updateSpotifyStatus("Signed out.");
+}
+
+async function createSpotifyTransaction() {
+  const codeVerifier = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)));
+  const codeChallenge = await sha256CodeChallenge(codeVerifier);
+  return {
+    state: base64UrlEncode(crypto.getRandomValues(new Uint8Array(16))),
+    codeVerifier,
+    codeChallenge,
+    createdAt: Date.now()
+  };
+}
+
+async function exchangeSpotifyCodeForSession(settings, code, codeVerifier) {
+  const tokenUrl = new URL("https://accounts.spotify.com/api/token");
+  const body = new URLSearchParams({
+    client_id: settings.clientId,
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: settings.redirectUri,
+    code_verifier: codeVerifier
+  });
+
+  const response = await fetch(tokenUrl.toString(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error_description || payload?.error || "Unable to complete Spotify sign-in.");
+  }
+
+  const profile = await fetchSpotifyProfile(payload.access_token);
+  return normalizeSpotifySession({
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token,
+    expiresAt: Date.now() + Math.max(0, Number(payload.expires_in || 3600)) * 1000,
+    tokenType: payload.token_type,
+    scope: payload.scope,
+    userId: profile.id,
+    displayName: profile.display_name || profile.id || "",
+    product: profile.product || "",
+    country: profile.country || "",
+    imageUrl: Array.isArray(profile.images) && profile.images.length ? profile.images[0].url : ""
+  });
+}
+
+async function fetchSpotifyProfile(accessToken) {
+  const response = await fetch("https://api.spotify.com/v1/me", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `Unable to load Spotify profile (${response.status}).`);
+  }
+  return payload || {};
+}
+
+async function refreshSpotifySession(settings, refreshToken) {
+  const tokenUrl = new URL("https://accounts.spotify.com/api/token");
+  const body = new URLSearchParams({
+    client_id: settings.clientId,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken
+  });
+
+  const response = await fetch(tokenUrl.toString(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error_description || payload?.error || "Unable to refresh Spotify session.");
+  }
+
+  const profile = await fetchSpotifyProfile(payload.access_token);
+  return normalizeSpotifySession({
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token || refreshToken,
+    expiresAt: Date.now() + Math.max(0, Number(payload.expires_in || 3600)) * 1000,
+    tokenType: payload.token_type,
+    scope: payload.scope,
+    userId: profile.id,
+    displayName: profile.display_name || profile.id || "",
+    product: profile.product || "",
+    country: profile.country || "",
+    imageUrl: Array.isArray(profile.images) && profile.images.length ? profile.images[0].url : ""
+  });
+}
+
+async function maybeRefreshSpotifySession(workspaceId) {
+  const session = getSpotifySession();
+  const settings = getSpotifySettings(workspaceId);
+  if (!session?.accessToken) {
+    return session;
+  }
+
+  if (session.expiresAt && Date.now() < session.expiresAt - 60_000) {
+    return session;
+  }
+
+  if (!session.refreshToken || !settings.clientId) {
+    return session;
+  }
+
+  const refreshed = await refreshSpotifySession(settings, session.refreshToken);
+  saveSpotifySession(refreshed);
+  return refreshed;
+}
+
+async function resolveSpotifyAccessToken(workspaceId) {
+  const session = await maybeRefreshSpotifySession(workspaceId);
+  return session?.accessToken || "";
+}
+
+async function ensureSpotifyPlayer(workspaceId, interactive = false) {
+  const workspace = getWorkspace(workspaceId);
+  const settings = getSpotifySettings(workspaceId);
+  const session = await maybeRefreshSpotifySession(workspaceId);
+
+  if (!settings.clientId || !settings.redirectUri) {
+    updateSpotifyStatus("Save your Spotify app settings first.");
+    return null;
+  }
+
+  if (!session?.accessToken) {
+    updateSpotifyStatus("Sign in with Spotify first.");
+    return null;
+  }
+
+  if (session.product && session.product !== "premium") {
+    updateSpotifyStatus("Spotify Premium is required for the browser player.");
+    return null;
+  }
+
+  if (appState.spotifyPlayer) {
+    return appState.spotifyPlayer;
+  }
+
+  if (appState.spotifyPlayerConnectingWorkspaceId === workspaceId && appState.spotifyPlayerConnectPromise) {
+    return appState.spotifyPlayerConnectPromise;
+  }
+
+  const connectPromise = (async () => {
+    if (appState.spotifyPlayer) {
+      return appState.spotifyPlayer;
+    }
+    appState.spotifyPlayerConnectingWorkspaceId = workspaceId;
+    await loadSpotifySdk();
+
+    const player = new Spotify.Player({
+      name: settings.playerName || `${workspace.label || workspace.id} Spotify`,
+      getOAuthToken: async (cb) => {
+        const token = await resolveSpotifyAccessToken(workspaceId).catch(() => "");
+        cb(token);
+      },
+      volume: 0.8
+    });
+
+    appState.spotifyPlayer = player;
+    appState.spotifyPlayerWorkspaceId = workspaceId;
+    appState.spotifyPlayerDeviceId = "";
+    appState.spotifyPlayerState = null;
+
+    player.addListener("ready", async ({ device_id }) => {
+      appState.spotifyPlayerDeviceId = device_id;
+      updateSpotifyStatus(`Spotify player connected as ${settings.playerName || "MyAxis Spotify"}.`);
+      try {
+        await transferSpotifyPlayback(workspaceId, device_id);
+        await disableSpotifyPlaybackModes(workspaceId);
+      } catch (error) {
+        console.warn("Unable to transfer Spotify playback.", error);
+      }
+      renderSpotify(getWorkspace(workspaceId));
+    });
+
+    player.addListener("not_ready", ({ device_id }) => {
+      if (appState.spotifyPlayerDeviceId === device_id) {
+        appState.spotifyPlayerDeviceId = "";
+        updateSpotifyStatus("Spotify player disconnected.");
+        renderSpotify(getWorkspace(workspaceId));
+      }
+    });
+
+    player.addListener("player_state_changed", (state) => {
+      setSpotifyPlayerState(state);
+      const currentTrackUri = String(appState.spotifyPlayerState?.track?.uri || "").trim();
+      if (currentTrackUri && currentTrackUri !== appState.spotifyCurrentTrackUri) {
+        appState.spotifyCurrentTrackUri = currentTrackUri;
+        appState.spotifyAutoAdvanceLock = false;
+        const queueIndex = appState.spotifyPlaybackQueue.findIndex((track) => String(track?.uri || "").trim() === currentTrackUri);
+        if (queueIndex >= 0) {
+          appState.spotifyPlaybackQueueIndex = queueIndex;
+        }
+      }
+      if (currentTrackUri) {
+        scheduleSpotifyPlaybackAdvance(workspaceId);
+        const currentTrack = appState.spotifyPlayerState?.track;
+        if (!appState.spotifyPlaybackQueue.length || appState.spotifyPlaybackQueueIndex < 0) {
+          prepareSpotifyPlaybackQueue(workspaceId, currentTrack || currentTrackUri).catch((error) => {
+            console.warn("Unable to queue Spotify recommendations.", error);
+          });
+        } else if (appState.spotifyPlaybackQueueIndex >= appState.spotifyPlaybackQueue.length - 2) {
+          extendSpotifyPlaybackQueue(workspaceId, currentTrack || currentTrackUri).catch((error) => {
+            console.warn("Unable to extend Spotify queue.", error);
+          });
+        }
+      } else {
+        clearSpotifyPlaylistAdvanceTimer();
+      }
+      renderSpotify(getWorkspace(workspaceId));
+    });
+
+    for (const [eventName, prefix] of [
+      ["initialization_error", "Spotify initialization failed"],
+      ["authentication_error", "Spotify authentication failed"],
+      ["account_error", "Spotify account error"],
+      ["playback_error", "Spotify playback error"]
+    ]) {
+      player.addListener(eventName, ({ message }) => {
+        const details = String(message || prefix).trim();
+        updateSpotifyStatus(details);
+        console.warn(details);
+      });
+    }
+
+    const connected = await player.connect();
+    if (!connected) {
+      throw new Error("Spotify player failed to connect.");
+    }
+
+    if (interactive) {
+      try {
+        await player.activateElement();
+      } catch {
+        // ignore
+      }
+    }
+
+    const currentState = await player.getCurrentState().catch(() => null);
+    setSpotifyPlayerState(currentState);
+    renderSpotify(getWorkspace(workspaceId));
+    return player;
+  })();
+
+  appState.spotifyPlayerConnectPromise = connectPromise;
+  try {
+    return await connectPromise;
+  } finally {
+    if (appState.spotifyPlayerConnectPromise === connectPromise) {
+      appState.spotifyPlayerConnectPromise = null;
+      appState.spotifyPlayerConnectingWorkspaceId = "";
+    }
+  }
+}
+
+async function transferSpotifyPlayback(workspaceId, deviceId) {
+  const token = await resolveSpotifyAccessToken(workspaceId);
+  if (!token || !deviceId) {
+    return null;
+  }
+
+  const response = await fetch("https://api.spotify.com/v1/me/player", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      device_ids: [deviceId],
+      play: false
+    })
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message || `Unable to transfer playback (${response.status}).`);
+  }
+
+  return true;
+}
+
+async function spotifyPlayerApiRequest(workspaceId, path, options = {}) {
+  const token = await resolveSpotifyAccessToken(workspaceId);
+  if (!token) {
+    throw new Error("Spotify sign-in is required.");
+  }
+
+  const response = await fetch(`https://api.spotify.com${path}`, {
+    method: options.method || "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(options.body ? { "content-type": "application/json" } : {})
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message || `Spotify request failed (${response.status}).`);
+  }
+
+  return response.status === 204 ? null : response.json().catch(() => null);
+}
+
+function normalizeSpotifyTrack(track) {
+  return {
+    type: "track",
+    uri: String(track?.uri || "").trim(),
+    name: String(track?.name || "").trim(),
+    artists: Array.isArray(track?.artists) ? track.artists.map((artist) => String(artist?.name || "").trim()).filter(Boolean) : [],
+    album: String(track?.album?.name || "").trim(),
+    imageUrl: String(track?.album?.images?.[0]?.url || "").trim(),
+    duration: Number(track?.duration_ms || 0)
+  };
+}
+
+function normalizeSpotifyPlaylist(playlist) {
+  return {
+    type: "playlist",
+    uri: String(playlist?.uri || "").trim(),
+    href: String(playlist?.href || "").trim(),
+    externalUrl: String(playlist?.external_urls?.spotify || "").trim(),
+    name: String(playlist?.name || "").trim(),
+    artists: [],
+    album: String(playlist?.owner?.display_name || playlist?.owner?.id || "Playlist").trim(),
+    imageUrl: String(playlist?.images?.[0]?.url || "").trim(),
+    duration: 0,
+    trackCount: Number(playlist?.tracks?.total || 0)
+  };
+}
+
+function getSpotifySearchStorageKey() {
+  return `${STORAGE_KEYS.spotifySettings}:search`;
+}
+
+function normalizeSpotifySearchState(state) {
+  const query = String(state?.query || "").trim();
+  const results = Array.isArray(state?.results)
+    ? state.results.map((item) => ({
+      uri: String(item?.uri || "").trim(),
+      name: String(item?.name || "").trim(),
+      artists: Array.isArray(item?.artists) ? item.artists.map((artist) => String(artist || "").trim()).filter(Boolean) : [],
+      album: String(item?.album || "").trim(),
+      imageUrl: String(item?.imageUrl || "").trim(),
+      duration: Number(item?.duration || 0)
+    })).filter((item) => item.uri && item.name)
+    : [];
+  return {
+    query,
+    results,
+    loading: Boolean(state?.loading),
+    error: String(state?.error || "")
+  };
+}
+
+function getSpotifySearchState(workspaceId) {
+  return normalizeSpotifySearchState(readStoredJson(getSpotifySearchStorageKey(), null));
+}
+
+function saveSpotifySearchState(workspaceId, state) {
+  localStorage.setItem(getSpotifySearchStorageKey(), JSON.stringify(normalizeSpotifySearchState(state)));
+}
+
+function clearSpotifySearchState() {
+  localStorage.removeItem(getSpotifySearchStorageKey());
+}
+
+function getSpotifyLibraryStorageKey() {
+  return `${STORAGE_KEYS.spotifySettings}:library`;
+}
+
+function normalizeSpotifyLibraryState(state) {
+  const items = Array.isArray(state?.items)
+    ? state.items.map((item) => ({
+      type: item?.type === "playlist" ? "playlist" : "track",
+      uri: String(item?.uri || "").trim(),
+      name: String(item?.name || "").trim(),
+      artists: Array.isArray(item?.artists) ? item.artists.map((artist) => String(artist || "").trim()).filter(Boolean) : [],
+      album: String(item?.album || "").trim(),
+      imageUrl: String(item?.imageUrl || "").trim(),
+      duration: Number(item?.duration || 0),
+      trackCount: Number(item?.trackCount || 0)
+    })).filter((item) => item.uri && item.name)
+    : [];
+  return {
+    items,
+    loading: Boolean(state?.loading),
+    error: String(state?.error || ""),
+    loadedForUserId: String(state?.loadedForUserId || "").trim()
+  };
+}
+
+function getSpotifyLibraryState() {
+  return normalizeSpotifyLibraryState(readStoredJson(getSpotifyLibraryStorageKey(), null));
+}
+
+function saveSpotifyLibraryState(state) {
+  localStorage.setItem(getSpotifyLibraryStorageKey(), JSON.stringify(normalizeSpotifyLibraryState(state)));
+}
+
+function getSpotifyLibraryVisibleStorageKey() {
+  return `${STORAGE_KEYS.spotifySettings}:library-visible`;
+}
+
+function getSpotifyLibraryVisibleState() {
+  return localStorage.getItem(getSpotifyLibraryVisibleStorageKey()) === "true";
+}
+
+function saveSpotifyLibraryVisibleState(visible) {
+  localStorage.setItem(getSpotifyLibraryVisibleStorageKey(), visible ? "true" : "false");
+  appState.spotifyLibraryVisible = Boolean(visible);
+}
+
+function getSpotifyPlaylistId(uri) {
+  const raw = String(uri || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (raw.startsWith("spotify:playlist:")) {
+    return raw.split(":").pop() || "";
+  }
+  try {
+    const url = new URL(raw);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const playlistsIndex = parts.indexOf("playlist");
+    if (playlistsIndex >= 0 && parts[playlistsIndex + 1]) {
+      return parts[playlistsIndex + 1];
+    }
+  } catch {
+    // ignore
+  }
+  if (/^[A-Za-z0-9]{20,}$/.test(raw)) {
+    return raw;
+  }
+  return raw;
+}
+
+async function searchSpotifyTracks(workspaceId, query) {
+  const term = String(query || "").trim();
+  const requestId = appState.spotifyRequestId + 1;
+  appState.spotifyRequestId = requestId;
+  saveSpotifySearchState(workspaceId, {
+    ...getSpotifySearchState(workspaceId),
+    query: term,
+    loading: true,
+    error: ""
+  });
+  renderSpotify(getWorkspace(workspaceId));
+
+  if (!term) {
+    saveSpotifySearchState(workspaceId, {
+      query: "",
+      loading: false,
+      error: "",
+      results: []
+    });
+    renderSpotify(getWorkspace(workspaceId));
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      q: term,
+      type: "track",
+      limit: "6"
+    });
+    const payload = await spotifyPlayerApiRequest(workspaceId, `/v1/search?${params.toString()}`);
+    if (requestId !== appState.spotifyRequestId) {
+      return;
+    }
+    const trackResults = Array.isArray(payload?.tracks?.items) ? payload.tracks.items.map(normalizeSpotifyTrack) : [];
+    saveSpotifySearchState(workspaceId, {
+      query: term,
+      loading: false,
+      error: "",
+      results: trackResults
+    });
+    renderSpotify(getWorkspace(workspaceId));
+  } catch (error) {
+    if (requestId !== appState.spotifyRequestId) {
+      return;
+    }
+    saveSpotifySearchState(workspaceId, {
+      ...getSpotifySearchState(workspaceId),
+      query: term,
+      loading: false,
+      error: error instanceof Error ? error.message : "Unable to search Spotify.",
+      results: []
+    });
+    renderSpotify(getWorkspace(workspaceId));
+  }
+}
+
+async function playSpotifySearchItem(workspaceId, item) {
+  const player = await ensureSpotifyPlayer(workspaceId, true);
+  if (!player) {
+    return;
+  }
+  await prepareSpotifyPlaybackQueue(workspaceId, item || "");
+  await transferSpotifyPlayback(workspaceId, appState.spotifyPlayerDeviceId);
+  await disableSpotifyPlaybackModes(workspaceId);
+  await playSpotifyTrackUri(workspaceId, item?.uri || "");
+  clearSpotifySearchState();
+  renderSpotify(getWorkspace(workspaceId));
+}
+
+async function handleSpotifyAction(workspaceId, action) {
+  const player = await ensureSpotifyPlayer(workspaceId, true);
+  if (!player) {
+    return;
+  }
+
+  switch (action) {
+    case "toggle-play":
+      await player.togglePlay();
+      break;
+    case "previous-track":
+      await advanceSpotifyPlaybackQueue(workspaceId, -1);
+      break;
+    case "next-track":
+      await advanceSpotifyPlaybackQueue(workspaceId, 1);
+      break;
+    case "connect":
+      await transferSpotifyPlayback(workspaceId, appState.spotifyPlayerDeviceId);
+      await disableSpotifyPlaybackModes(workspaceId);
+      break;
+    default:
+      break;
+  }
+
+  const currentState = await player.getCurrentState().catch(() => null);
+  setSpotifyPlayerState(currentState);
+  renderSpotify(getWorkspace(workspaceId));
+}
+
+function formatSpotifyDuration(value) {
+  const total = Math.max(0, Math.floor(Number(value || 0) / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = String(total % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function getSpotifyPlayerLabel(workspaceId) {
+  const session = getSpotifySession();
+  if (session.displayName) {
+    return `Signed in as ${session.displayName}`;
+  }
+  return "Spotify";
+}
+
+function renderSpotify(workspace) {
+  if (!spotifyPanelEl) {
+    return;
+  }
+
+  const workspaceId = workspace.id;
+  const settings = getSpotifySettings(workspaceId);
+  const session = getSpotifySession();
+  const playerState = getSpotifyPlaybackStateSnapshot();
+  const playerReady = Boolean(appState.spotifyPlayerDeviceId);
+  const hasSettings = Boolean(settings.clientId && settings.redirectUri);
+  const playLabel = !playerState || playerState.paused ? "Play" : "Pause";
+  const searchState = getSpotifySearchState(workspaceId);
+
+  if (spotifyHintEl) {
+    spotifyHintEl.textContent = !hasSettings
+      ? "Save your Spotify app settings"
+      : !session?.accessToken
+        ? "Sign in to listen"
+        : session.product && session.product !== "premium"
+          ? "Premium required"
+          : playerReady
+            ? "Player ready"
+            : "Player starting";
+  }
+
+  if (!hasSettings) {
+    spotifyPanelEl.innerHTML = `
+      <div class="spotify-shell spotify-shell--empty">
+        <div class="spotify-topline">
+          <strong>Spotify</strong>
+          <span class="tag-chip tag-chip--spotify">Setup</span>
+        </div>
+        <p class="spotify-status">Add your Spotify app client ID and redirect URI in the Widgets drawer to enable the player.</p>
+      </div>
+    `;
+  } else if (!session?.accessToken) {
+    spotifyPanelEl.innerHTML = `
+      <div class="spotify-shell spotify-shell--empty">
+        <div class="spotify-topline">
+          <strong>Spotify</strong>
+          <span class="tag-chip tag-chip--spotify">Login</span>
+        </div>
+        <p class="spotify-status">Sign in to Spotify to turn this into a browser player.</p>
+        <div class="spotify-actions">
+          <button class="button button-primary button-compact" type="button" data-spotify-action="login">Login to Spotify</button>
+        </div>
+      </div>
+    `;
+  } else {
+    const track = playerState?.track;
+    const currentTrackUri = String(track?.uri || "").trim();
+    const progress = track && playerState?.duration ? Math.min(100, Math.max(0, (playerState.position / playerState.duration) * 100)) : 0;
+    const imageMarkup = track?.imageUrl
+      ? `<img class="spotify-art" src="${escapeHtml(track.imageUrl)}" alt="" />`
+      : `<div class="spotify-art spotify-art--placeholder">♪</div>`;
+    const renderSpotifyItem = (item) => `
+      <button class="spotify-result" type="button" data-spotify-action="play-track" data-spotify-item-type="${escapeHtml(item.type)}" data-spotify-uri="${escapeHtml(item.uri)}" data-spotify-name="${escapeHtml(item.name)}" data-spotify-image="${escapeHtml(item.imageUrl || "")}" data-spotify-owner="${escapeHtml(item.album || "")}">
+        ${item.imageUrl ? `<img class="spotify-result-art spotify-result-art--image" src="${escapeHtml(item.imageUrl)}" alt="" />` : `<span class="spotify-result-art">${escapeHtml((item.name || "?").slice(0, 1).toUpperCase())}</span>`}
+        <span class="spotify-result-copy">
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>${escapeHtml(item.artists.length ? item.artists.join(", ") : "Spotify")}</span>
+        </span>
+        <span class="spotify-result-meta">${escapeHtml(item.album || "Track")}</span>
+      </button>
+    `;
+    const searchResultsMarkup = searchState.results.length
+      ? `
+        <div class="spotify-search-results" aria-label="Spotify search results">
+          ${searchState.results.map((result) => renderSpotifyItem(result, "Play")).join("")}
+        </div>
+      `
+      : "";
+    spotifyPanelEl.innerHTML = `
+      <div class="spotify-shell spotify-shell--player">
+        <div class="spotify-topline">
+          <strong>${escapeHtml(getSpotifyPlayerLabel(workspaceId))}</strong>
+          <span class="tag-chip tag-chip--spotify">${escapeHtml(session.product === "premium" ? "Premium" : "Spotify")}</span>
+        </div>
+        <div class="spotify-now-playing">
+          ${imageMarkup}
+          <div class="spotify-now-playing-copy">
+            <p class="spotify-now-playing-eyebrow">${escapeHtml(playerReady ? "Connected player" : "Signed in")}</p>
+            <h4>${escapeHtml(track?.name || "Ready to play")}</h4>
+            <p>${escapeHtml(track?.artists?.length ? track.artists.join(", ") : "Connect Spotify to start playback")}</p>
+            <p class="spotify-now-playing-meta">${escapeHtml(track?.album || session.displayName || "MyAxis Spotify")}</p>
+          </div>
+        </div>
+        <div class="spotify-progress">
+          <div class="spotify-progress-bar"><span style="width: ${progress}%"></span></div>
+          <div class="spotify-progress-labels">
+            <span>${escapeHtml(formatSpotifyDuration(playerState?.position || 0))}</span>
+            <span>${escapeHtml(formatSpotifyDuration(playerState?.duration || 0))}</span>
+          </div>
+        </div>
+        <div class="spotify-controls">
+          <button class="button button-compact" type="button" data-spotify-action="previous-track" aria-label="Previous track">⏮</button>
+          <button class="button button-primary button-compact" type="button" data-spotify-action="toggle-play">${escapeHtml(playLabel)}</button>
+          <button class="button button-compact" type="button" data-spotify-action="next-track" aria-label="Next track">⏭</button>
+        </div>
+        <form class="spotify-search" data-spotify-search-form>
+          <input class="spotify-search-input" data-spotify-search-input type="search" value="${escapeHtml(searchState.query)}" placeholder="Search songs" />
+          <button class="button button-primary button-compact" type="button" data-spotify-action="search-track">Search</button>
+          <button class="button button-compact" type="button" data-spotify-action="clear-search">Clear</button>
+        </form>
+        ${searchState.loading ? `<p class="spotify-status">Searching Spotify…</p>` : ""}
+        ${searchState.error ? `<p class="spotify-status spotify-status--error">${escapeHtml(searchState.error)}</p>` : ""}
+        ${searchResultsMarkup}
+      </div>
+    `;
+  }
+
+  spotifyPlaybackTickerSnapshot = "";
+  const searchForm = spotifyPanelEl.querySelector("[data-spotify-search-form]");
+  const searchInput = spotifyPanelEl.querySelector("[data-spotify-search-input]");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      saveSpotifySearchState(workspaceId, {
+        ...getSpotifySearchState(workspaceId),
+        query: String(searchInput.value || "")
+      });
+    });
+  }
+  searchForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    searchSpotifyTracks(workspaceId, String(searchInput?.value || "")).catch((error) => {
+      console.warn("Unable to search Spotify.", error);
+      updateSpotifyStatus(error instanceof Error ? error.message : "Unable to search Spotify.");
+    });
+  });
+
+  spotifyPanelEl.querySelectorAll("[data-spotify-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.spotifyAction;
+      if (action === "open-settings") {
+        return;
+      }
+      if (action === "login") {
+        handleSpotifyLoginClick().catch((error) => {
+          console.warn("Unable to sign in to Spotify.", error);
+        });
+        return;
+      }
+      if (action === "search-track") {
+        searchSpotifyTracks(workspace.id, String(searchInput?.value || "")).catch((error) => {
+          console.warn("Unable to search Spotify.", error);
+          updateSpotifyStatus(error instanceof Error ? error.message : "Unable to search Spotify.");
+        });
+        return;
+      }
+      if (action === "clear-search") {
+        clearSpotifySearchState();
+        renderSpotify(getWorkspace(workspace.id));
+        return;
+      }
+      if (action === "play-search-track") {
+        const item = {
+          uri: button.dataset.spotifyUri || ""
+        };
+        if (!item.uri) {
+          return;
+        }
+        playSpotifySearchItem(workspace.id, item).catch((error) => {
+          console.warn("Unable to play Spotify search result.", error);
+          updateSpotifyStatus(error instanceof Error ? error.message : "Unable to play the selected track.");
+        });
+        return;
+      }
+      if (action === "play-track") {
+        const item = {
+          type: "track",
+          uri: button.dataset.spotifyUri || ""
+        };
+        if (!item.uri) {
+          return;
+        }
+        playSpotifySearchItem(workspace.id, item).catch((error) => {
+          console.warn("Unable to play Spotify item.", error);
+          updateSpotifyStatus(error instanceof Error ? error.message : "Unable to play the selected item.");
+        });
+        return;
+      }
+      handleSpotifyAction(workspace.id, action).catch((error) => {
+        console.warn("Unable to control Spotify playback.", error);
+        updateSpotifyStatus(error instanceof Error ? error.message : "Unable to control Spotify playback.");
+      });
+    });
+  });
+
+  if (hasSettings && session?.accessToken && !appState.spotifyPlayer) {
+    ensureSpotifyPlayer(workspaceId).catch((error) => {
+      console.warn("Unable to initialize Spotify player.", error);
+      updateSpotifyStatus(error instanceof Error ? error.message : "Unable to initialize Spotify player.");
+    });
+  }
+
 }
 
 function getBackendSyncConfig() {
@@ -3594,7 +5453,11 @@ function getWorkspaceBackendSnapshot(workspaceId) {
       captureCalculator: getStoredCaptureCalculatorValue(workspace.id),
       captureBoard: getStoredCaptureBoard(workspace.id),
       captureAssistant: getStoredCaptureAssistant(workspace.id),
-      flashcards: getFlashcardsState(workspace)
+      flashcards: getFlashcardsState(workspace),
+      widgetVisibility: getWidgetVisibilityState(workspace.id),
+      weatherSettings: getWeatherSettings(workspace.id),
+      weatherCache: getWeatherCache(workspace.id),
+      spotifySettings: getSpotifySettings(workspace.id)
     }
   };
 }
@@ -3696,6 +5559,22 @@ function applyBackendWorkspaceRecord(record) {
   if (Array.isArray(state.flashcards)) {
     saveFlashcardsState(workspaceId, normalizeFlashcards(state.flashcards));
   }
+
+  if (state.widgetVisibility && typeof state.widgetVisibility === "object") {
+    saveWidgetVisibilityState(workspaceId, state.widgetVisibility);
+  }
+
+  if (state.weatherSettings && typeof state.weatherSettings === "object") {
+    saveWeatherSettings(workspaceId, state.weatherSettings);
+  }
+
+  if (state.weatherCache && typeof state.weatherCache === "object") {
+    saveWeatherCache(workspaceId, state.weatherCache);
+  }
+
+  if (state.spotifySettings && typeof state.spotifySettings === "object") {
+    saveSpotifySettings(workspaceId, state.spotifySettings);
+  }
 }
 
 function syncHomeCalendarSection(workspaceOrId) {
@@ -3704,12 +5583,7 @@ function syncHomeCalendarSection(workspaceOrId) {
   }
 
   const workspace = typeof workspaceOrId === "string" ? getWorkspace(workspaceOrId) : normalizeWorkspace(workspaceOrId);
-  const isHome = workspace.id === "home";
-  homeCalendarSectionEl.classList.toggle("hidden", !isHome);
-  if (!isHome) {
-    return;
-  }
-
+  homeCalendarSectionEl.classList.remove("hidden");
   fillHomeCalendarForm(workspace.id);
 }
 
@@ -4631,6 +6505,116 @@ function saveHomeCalendarConnection(workspaceId, connection) {
     })
   );
   scheduleWorkspaceStateSync(workspaceId);
+}
+
+function getWeatherSettingsStorageKey(workspaceId) {
+  return `${STORAGE_KEYS.weatherSettings}:${workspaceId}`;
+}
+
+function getWeatherCacheKey(workspaceId, settings) {
+  const city = String(settings?.city || "").trim().toLowerCase();
+  const useLocation = Boolean(settings?.useLocation);
+  return `${useLocation ? "geo" : "city"}:${city || "default"}`;
+}
+
+function getWeatherSettings(workspaceId) {
+  const stored = readStoredJson(getWeatherSettingsStorageKey(workspaceId), null);
+  return {
+    useLocation: Boolean(stored?.useLocation),
+    city: String(stored?.city || "Chicago, IL").trim() || "Chicago, IL"
+  };
+}
+
+function saveWeatherSettings(workspaceId, settings) {
+  const nextSettings = {
+    useLocation: Boolean(settings?.useLocation),
+    city: String(settings?.city || "Chicago, IL").trim() || "Chicago, IL"
+  };
+  localStorage.setItem(getWeatherSettingsStorageKey(workspaceId), JSON.stringify(nextSettings));
+  scheduleWorkspaceStateSync(workspaceId);
+}
+
+function getWeatherCacheStorageKey(workspaceId) {
+  return `${STORAGE_KEYS.weatherCache}:${workspaceId}`;
+}
+
+function getWeatherCache(workspaceId) {
+  return readStoredJson(getWeatherCacheStorageKey(workspaceId), null);
+}
+
+function saveWeatherCache(workspaceId, payload) {
+  localStorage.setItem(getWeatherCacheStorageKey(workspaceId), JSON.stringify(payload));
+  scheduleWorkspaceStateSync(workspaceId);
+}
+
+function clearWeatherCache(workspaceId) {
+  localStorage.removeItem(getWeatherCacheStorageKey(workspaceId));
+  scheduleWorkspaceStateSync(workspaceId);
+}
+
+async function resolveWeatherLocation(settings) {
+  if (settings.useLocation && navigator.geolocation && window.isSecureContext) {
+    try {
+      const coords = await requestCurrentPosition();
+      return {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        label: "Current location"
+      };
+    } catch (error) {
+      console.warn("Using default city for weather.", error);
+    }
+  }
+
+  const city = String(settings.city || "Chicago, IL").trim() || "Chicago, IL";
+  const geocode = await geocodeWeatherCity(city);
+  if (!geocode) {
+    return null;
+  }
+
+  return {
+    latitude: geocode.latitude,
+    longitude: geocode.longitude,
+    label: geocode.label || city
+  };
+}
+
+function requestCurrentPosition() {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      }),
+      (error) => reject(error),
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 15 * 60 * 1000 }
+    );
+  });
+}
+
+async function geocodeWeatherCity(city) {
+  const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
+  url.searchParams.set("name", city);
+  url.searchParams.set("count", "1");
+  url.searchParams.set("language", "en");
+  url.searchParams.set("format", "json");
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Weather lookup failed (${response.status})`);
+  }
+
+  const payload = await response.json();
+  const place = Array.isArray(payload?.results) ? payload.results[0] : null;
+  if (!place) {
+    return null;
+  }
+
+  return {
+    latitude: Number(place.latitude),
+    longitude: Number(place.longitude),
+    label: [place.name, place.admin1, place.country].filter(Boolean).join(", ") || city
+  };
 }
 
 function getHomeCalendarCache(workspaceId) {
@@ -5562,7 +7546,11 @@ function exportBackup() {
         captureCalculator: getStoredCaptureCalculatorValue(workspace.id),
         captureBoard: getStoredCaptureBoard(workspace.id),
         captureAssistant: getStoredCaptureAssistant(workspace.id),
-        flashcards: getFlashcardsState(workspace)
+        flashcards: getFlashcardsState(workspace),
+        widgetVisibility: getWidgetVisibilityState(workspace.id),
+        weatherSettings: getWeatherSettings(workspace.id),
+        weatherCache: getWeatherCache(workspace.id),
+        spotifySettings: getSpotifySettings(workspace.id)
       }))
     }
   };
@@ -5715,6 +7703,22 @@ function applyStateBackup(state) {
 
         if (Array.isArray(workspaceState.flashcards)) {
           saveFlashcardsState(workspaceState.id, normalizeFlashcards(workspaceState.flashcards));
+        }
+
+        if (workspaceState.widgetVisibility && typeof workspaceState.widgetVisibility === "object") {
+          saveWidgetVisibilityState(workspaceState.id, workspaceState.widgetVisibility);
+        }
+
+        if (workspaceState.weatherSettings && typeof workspaceState.weatherSettings === "object") {
+          saveWeatherSettings(workspaceState.id, workspaceState.weatherSettings);
+        }
+
+        if (workspaceState.weatherCache && typeof workspaceState.weatherCache === "object") {
+          saveWeatherCache(workspaceState.id, workspaceState.weatherCache);
+        }
+
+        if (workspaceState.spotifySettings && typeof workspaceState.spotifySettings === "object") {
+          saveSpotifySettings(workspaceState.id, workspaceState.spotifySettings);
         }
       }
     } finally {
