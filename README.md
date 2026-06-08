@@ -44,6 +44,24 @@ The AWS deployment path is designed to stay simple and reusable:
 - EventBridge can drive scheduled sync jobs later
 - GitHub Actions deploys the frontend through an AWS role instead of stored AWS keys
 
+High-level flow:
+
+```mermaid
+flowchart LR
+  U[User Browser] --> C[CloudFront]
+  C --> S[S3 Static Site]
+  U --> A[Cognito Sign-In]
+  U --> API[API Gateway]
+  API --> L[Lambda]
+  L --> D[(DynamoDB)]
+  L --> S3[(S3 Backups / Assets)]
+  L --> AI[AI Endpoint]
+  L --> EXT[Google / Microsoft / Spotify APIs]
+  GH[GitHub Actions] --> S
+  GH --> C
+  GH --> API
+```
+
 ## Repository Layout
 
 - `app.js`, `index.html`, and `styles.css` are the public dashboard shell
