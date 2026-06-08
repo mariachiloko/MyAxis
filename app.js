@@ -1372,6 +1372,12 @@ function renderCalendar(events) {
         });
         return;
       }
+      if (action === "switch-account") {
+        handleCalendarWidgetSettingsSwitchAccount(workspace.id).catch((error) => {
+          console.warn("Unable to switch calendar account.", error);
+        });
+        return;
+      }
       if (action === "disconnect") {
         disconnectWorkspaceGoogleCalendar(workspace.id);
       }
@@ -1484,6 +1490,7 @@ function renderCalendarSettingsMarkup(workspace, connection, open) {
           <div class="drawer-actions">
             <button class="button button-primary" type="button" data-calendar-settings-action="save">${managedGoogle ? "Link calendar" : "Save"}</button>
             <button class="button" type="button" data-calendar-settings-action="sync" ${effectiveClientId ? "" : "disabled"}>Sync now</button>
+            <button class="button" type="button" data-calendar-settings-action="switch-account" ${effectiveClientId ? "" : "disabled"}>Use different account</button>
             <button class="button button-danger" type="button" data-calendar-settings-action="disconnect" ${!connected && !getHomeCalendarCache(workspace.id).length ? "disabled" : ""}>Disconnect</button>
           </div>
           <p class="panel-hint">${escapeHtml(status)}</p>
@@ -6591,6 +6598,18 @@ async function handleCalendarWidgetSettingsSync(workspaceId) {
   await syncHomeGoogleCalendar(workspaceId, { interactive: true });
 }
 
+async function handleCalendarWidgetSettingsSwitchAccount(workspaceId) {
+  const currentConnection = getHomeCalendarConnection(workspaceId);
+  clearStoredGoogleCalendarToken(workspaceId);
+  saveHomeCalendarConnection(workspaceId, {
+    ...currentConnection,
+    lastSyncAt: "",
+    lastError: ""
+  });
+  fillHomeCalendarForm(workspaceId);
+  await syncHomeGoogleCalendar(workspaceId, { interactive: true, forceAccountSelect: true });
+}
+
 function disconnectWorkspaceGoogleCalendar(workspaceId) {
   clearHomeCalendarConnection(workspaceId);
   syncHomeCalendarConnectionToBackend(workspaceId).catch((error) => {
@@ -6633,7 +6652,7 @@ async function syncHomeGoogleCalendar(workspaceId, options = {}) {
 
   try {
     await loadGoogleIdentityScript();
-    const token = await getGoogleCalendarAccessToken(clientId, Boolean(options.interactive));
+    const token = await getGoogleCalendarAccessToken(workspaceId, clientId, Boolean(options.interactive), Boolean(options.forceAccountSelect));
     const calendarIds = getHomeCalendarIds(connection);
     const eventBatches = await Promise.all(calendarIds.map((calendarId) => fetchGoogleCalendarEvents(calendarId, token.accessToken, appState.calendarAnchor)));
     const events = eventBatches.flat();
@@ -6737,22 +6756,22 @@ function clearStoredGoogleCalendarToken(workspaceId) {
   localStorage.removeItem(getGoogleCalendarTokenStorageKey(workspaceId));
 }
 
-async function getGoogleCalendarAccessToken(clientId, interactive = false) {
-  const storedToken = getStoredGoogleCalendarToken("home");
+async function getGoogleCalendarAccessToken(workspaceId, clientId, interactive = false, forceAccountSelect = false) {
+  const storedToken = getStoredGoogleCalendarToken(workspaceId);
   if (storedToken && Number(storedToken.expiresAt) > Date.now() + 30000) {
     return storedToken;
   }
 
-  const tokenResponse = await requestGoogleAccessToken(clientId, interactive);
+  const tokenResponse = await requestGoogleAccessToken(clientId, interactive, forceAccountSelect);
   const token = {
     accessToken: tokenResponse.access_token,
     expiresAt: Date.now() + Math.max(0, Number(tokenResponse.expires_in || 3600)) * 1000
   };
-  saveStoredGoogleCalendarToken("home", token);
+  saveStoredGoogleCalendarToken(workspaceId, token);
   return token;
 }
 
-function requestGoogleAccessToken(clientId, interactive = false) {
+function requestGoogleAccessToken(clientId, interactive = false, forceAccountSelect = false) {
   return new Promise((resolve, reject) => {
     if (!window.google?.accounts?.oauth2) {
       reject(new Error("Google sign-in is not available yet."));
@@ -6771,7 +6790,13 @@ function requestGoogleAccessToken(clientId, interactive = false) {
       }
     });
 
-    tokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
+    tokenClient.requestAccessToken({
+      prompt: interactive
+        ? forceAccountSelect
+          ? "consent select_account"
+          : "consent"
+        : ""
+    });
   });
 }
 
