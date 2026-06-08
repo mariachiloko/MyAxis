@@ -311,6 +311,7 @@ async function bootstrap() {
   await handleCognitoRedirect().catch((error) => {
     console.warn("Unable to complete Cognito login.", error);
   });
+  await maybeRefreshCognitoSession().catch(() => null);
   if (shouldShowCognitoGate()) {
     showCognitoGate();
     wireAuthGateControls();
@@ -3721,6 +3722,10 @@ function isLocalPreviewHost() {
 
 function shouldShowCognitoGate() {
   if (isLocalPreviewHost()) {
+    return false;
+  }
+
+  if (getStoredCognitoSession()) {
     return false;
   }
 
