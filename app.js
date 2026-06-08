@@ -30,7 +30,9 @@ const STORAGE_KEYS = {
   backendApiToken: "workspace-dashboard:backend-api-token",
   cognitoSettings: "workspace-dashboard:cognito-settings",
   cognitoSession: "workspace-dashboard:cognito-session",
-  cognitoTransaction: "workspace-dashboard:cognito-transaction"
+  cognitoTransaction: "workspace-dashboard:cognito-transaction",
+  cognitoTransactionCurrent: "workspace-dashboard:cognito-transaction-current",
+  cognitoTransactionStates: "workspace-dashboard:cognito-transaction-states"
 };
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -3793,7 +3795,7 @@ async function prepareCognitoGateLoginUrl() {
   }
 
   const transaction = await createCognitoTransaction();
-  localStorage.setItem(STORAGE_KEYS.cognitoTransaction, JSON.stringify(transaction));
+  saveCognitoTransaction(transaction);
   authGateLoginEl.href = buildCognitoAuthorizeUrl(settings, transaction).toString();
 }
 
@@ -5500,7 +5502,7 @@ async function handleCognitoLoginClick() {
     }
 
     const transaction = await createCognitoTransaction();
-    localStorage.setItem(STORAGE_KEYS.cognitoTransaction, JSON.stringify(transaction));
+    saveCognitoTransaction(transaction);
     const authorizeUrl = buildCognitoAuthorizeUrl(settings, transaction);
     if (authGateStatusEl) {
       authGateStatusEl.textContent = "Opening Cognito sign-in...";
@@ -5560,7 +5562,7 @@ async function handleCognitoRedirect() {
     return;
   }
 
-  const transaction = readStoredJson(STORAGE_KEYS.cognitoTransaction, null);
+  const transaction = getCognitoTransaction(state);
   if (!transaction || transaction.state !== state) {
     window.alert("That sign-in session could not be verified. Try again.");
     return;
@@ -5569,7 +5571,7 @@ async function handleCognitoRedirect() {
   const settings = getCognitoSettings();
   const session = await exchangeCognitoCodeForSession(settings, code, transaction.codeVerifier);
   saveCognitoSession(session);
-  localStorage.removeItem(STORAGE_KEYS.cognitoTransaction);
+  clearCognitoTransaction(transaction.state);
   url.search = "";
   window.history.replaceState({}, document.title, url.toString());
   fillCognitoSettingsForm();
@@ -5598,7 +5600,7 @@ function saveCognitoSession(session) {
 
 function clearStoredCognitoSession() {
   localStorage.removeItem(STORAGE_KEYS.cognitoSession);
-  localStorage.removeItem(STORAGE_KEYS.cognitoTransaction);
+  clearCognitoTransaction();
   fillCognitoSettingsForm();
 }
 
@@ -5668,6 +5670,101 @@ async function createCognitoTransaction() {
     codeVerifier,
     codeChallenge
   };
+}
+
+function getStoredCognitoTransactionStates() {
+  const stored = readStoredJson(STORAGE_KEYS.cognitoTransactionStates, []);
+  return Array.isArray(stored) ? stored.map((state) => String(state || "").trim()).filter(Boolean) : [];
+}
+
+function saveStoredCognitoTransactionStates(states) {
+  const uniqueStates = Array.from(new Set((Array.isArray(states) ? states : []).map((state) => String(state || "").trim()).filter(Boolean)));
+  if (uniqueStates.length) {
+    localStorage.setItem(STORAGE_KEYS.cognitoTransactionStates, JSON.stringify(uniqueStates));
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.cognitoTransactionStates);
+  }
+}
+
+function getCognitoTransactionStorageKey(state) {
+  const transactionState = String(state || "").trim();
+  return transactionState ? `${STORAGE_KEYS.cognitoTransaction}:${transactionState}` : STORAGE_KEYS.cognitoTransactionCurrent;
+}
+
+function saveCognitoTransaction(transaction) {
+  const normalized = {
+    state: String(transaction?.state || "").trim(),
+    codeVerifier: String(transaction?.codeVerifier || "").trim(),
+    codeChallenge: String(transaction?.codeChallenge || "").trim(),
+    createdAt: Number(transaction?.createdAt || Date.now())
+  };
+  if (!normalized.state || !normalized.codeVerifier || !normalized.codeChallenge) {
+    return;
+  }
+
+  localStorage.setItem(getCognitoTransactionStorageKey(normalized.state), JSON.stringify(normalized));
+  localStorage.setItem(STORAGE_KEYS.cognitoTransactionCurrent, JSON.stringify(normalized));
+  const states = getStoredCognitoTransactionStates();
+  states.push(normalized.state);
+  saveStoredCognitoTransactionStates(states);
+}
+
+function getCognitoTransaction(state = "") {
+  const transactionState = String(state || "").trim();
+  if (transactionState) {
+    const stored = readStoredJson(getCognitoTransactionStorageKey(transactionState), null);
+    if (stored && typeof stored === "object") {
+      return {
+        state: String(stored.state || "").trim(),
+        codeVerifier: String(stored.codeVerifier || "").trim(),
+        codeChallenge: String(stored.codeChallenge || "").trim(),
+        createdAt: Number(stored.createdAt || 0)
+      };
+    }
+  }
+
+  const current = readStoredJson(STORAGE_KEYS.cognitoTransactionCurrent, null);
+  if (current && typeof current === "object") {
+    return {
+      state: String(current.state || "").trim(),
+      codeVerifier: String(current.codeVerifier || "").trim(),
+      codeChallenge: String(current.codeChallenge || "").trim(),
+      createdAt: Number(current.createdAt || 0)
+    };
+  }
+
+  const legacy = readStoredJson(STORAGE_KEYS.cognitoTransaction, null);
+  if (legacy && typeof legacy === "object") {
+    return {
+      state: String(legacy.state || "").trim(),
+      codeVerifier: String(legacy.codeVerifier || "").trim(),
+      codeChallenge: String(legacy.codeChallenge || "").trim(),
+      createdAt: Number(legacy.createdAt || 0)
+    };
+  }
+
+  return null;
+}
+
+function clearCognitoTransaction(state = "") {
+  const transactionState = String(state || "").trim();
+  if (transactionState) {
+    localStorage.removeItem(getCognitoTransactionStorageKey(transactionState));
+  }
+
+  localStorage.removeItem(STORAGE_KEYS.cognitoTransactionCurrent);
+  localStorage.removeItem(STORAGE_KEYS.cognitoTransaction);
+
+  const states = getStoredCognitoTransactionStates();
+  if (transactionState) {
+    saveStoredCognitoTransactionStates(states.filter((item) => item !== transactionState));
+    return;
+  }
+
+  for (const existingState of states) {
+    localStorage.removeItem(getCognitoTransactionStorageKey(existingState));
+  }
+  localStorage.removeItem(STORAGE_KEYS.cognitoTransactionStates);
 }
 
 async function exchangeCognitoCodeForSession(settings, code, codeVerifier) {
