@@ -12,6 +12,12 @@ Use the Spotify widget as a small browser player inside MyAxis.
 4. A redirect URI that matches the local app or deployed site.
 5. For local testing, use `http://127.0.0.1:PORT/` instead of `localhost`.
 
+## Cloud builds
+
+- In the AWS build, the Spotify client ID and redirect URI are supplied by the deployment.
+- Normal users only see `Login to Spotify` in the widget.
+- The manual fields stay available for localhost testing and admin setup.
+
 ## How to set it up
 
 1. Open the Widgets drawer.

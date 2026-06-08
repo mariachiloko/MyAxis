@@ -18,6 +18,12 @@ Link the Home workspace to Google Calendar.
 - Calendar IDs you want to follow, separated by commas or new lines
 - A local browser session or a future AWS login flow
 
+## Cloud builds
+
+- In the AWS build, the Google client ID is supplied by the deployment.
+- Normal users only click `Link calendar` inside the calendar widget.
+- The manual client ID and calendar ID fields stay available for localhost testing and admin setup.
+
 ## What to keep private
 
 - Client secrets

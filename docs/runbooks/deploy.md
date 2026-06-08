@@ -46,6 +46,17 @@ You can deploy when these are true:
 - Lambda and API Gateway for backend requests
 - Bedrock for AI replies and motivation quotes if you want the AWS-native AI path
 
+## Provider setup
+
+The deployed build can receive provider app IDs from runtime config so normal users do not see raw IDs in the UI:
+
+- `MYAXIS_SPOTIFY_CLIENT_ID`
+- `MYAXIS_SPOTIFY_REDIRECT_URI`
+- `MYAXIS_GOOGLE_CLIENT_ID`
+- `MYAXIS_GOOGLE_REDIRECT_URI`
+
+When these are set, the dashboard shows user-facing actions like `Login to Spotify` and `Link calendar` instead of setup fields.
+
 ## What to check after deploy
 
 - The site opens from CloudFront.

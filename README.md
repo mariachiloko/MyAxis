@@ -30,6 +30,7 @@ This project shows:
 - Home workspace menu and grocery list
 - Optional calendar linking per workspace
 - Optional Spotify browser player per workspace
+- Cloud-deployed provider IDs can be injected at build time so normal users only see `Login to Spotify` and `Link calendar`
 
 ## Cloud Architecture
 

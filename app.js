@@ -1402,7 +1402,9 @@ function renderCalendar(events) {
 }
 
 function renderCalendarSettingsMarkup(workspace, connection, open) {
-  const connected = Boolean(connection.enabled && connection.clientId);
+  const managedGoogle = isManagedGoogleCalendarConfigured();
+  const effectiveClientId = getEffectiveGoogleCalendarClientId(connection);
+  const connected = Boolean(connection.enabled && effectiveClientId);
   const calendarIds = Array.isArray(connection.calendarIds) && connection.calendarIds.length
     ? connection.calendarIds.join(", ")
     : connection.calendarId || "primary";
@@ -1428,21 +1430,25 @@ function renderCalendarSettingsMarkup(workspace, connection, open) {
       </div>
       ${open ? `
         <div class="drawer-form calendar-connection-form">
-          <label>
-            Google client ID
-            <input type="text" data-calendar-settings-field="clientId" value="${escapeHtml(connection.clientId || "")}" placeholder="Google OAuth client ID" />
-          </label>
-          <label>
-            Calendar IDs
-            <input type="text" data-calendar-settings-field="calendarIds" value="${escapeHtml(calendarIds)}" placeholder="primary" />
-          </label>
-          <label class="drawer-checkbox">
-            <input type="checkbox" data-calendar-settings-field="enabled" ${connection.enabled ? "checked" : ""} />
-            <span>Enable calendar sync for this workspace</span>
-          </label>
+          ${managedGoogle ? `
+            <p class="panel-hint">MyAxis will use your linked Google account for this workspace. Choose link to connect and sync the calendar automatically.</p>
+          ` : `
+            <label>
+              Google client ID
+              <input type="text" data-calendar-settings-field="clientId" value="${escapeHtml(connection.clientId || "")}" placeholder="Google OAuth client ID" />
+            </label>
+            <label>
+              Calendar IDs
+              <input type="text" data-calendar-settings-field="calendarIds" value="${escapeHtml(calendarIds)}" placeholder="primary" />
+            </label>
+            <label class="drawer-checkbox">
+              <input type="checkbox" data-calendar-settings-field="enabled" ${connection.enabled ? "checked" : ""} />
+              <span>Enable calendar sync for this workspace</span>
+            </label>
+          `}
           <div class="drawer-actions">
-            <button class="button button-primary" type="button" data-calendar-settings-action="save">Save</button>
-            <button class="button" type="button" data-calendar-settings-action="sync" ${connection.clientId ? "" : "disabled"}>Sync now</button>
+            <button class="button button-primary" type="button" data-calendar-settings-action="save">${managedGoogle ? "Link calendar" : "Save"}</button>
+            <button class="button" type="button" data-calendar-settings-action="sync" ${effectiveClientId ? "" : "disabled"}>Sync now</button>
             <button class="button button-danger" type="button" data-calendar-settings-action="disconnect" ${!connected && !getHomeCalendarCache(workspace.id).length ? "disabled" : ""}>Disconnect</button>
           </div>
           <p class="panel-hint">${escapeHtml(status)}</p>
@@ -3500,7 +3506,7 @@ function syncDrawerMode() {
     drawerWeatherSectionEl.classList.toggle("hidden", !isWeather);
   }
   if (drawerSpotifySectionEl) {
-    drawerSpotifySectionEl.classList.toggle("hidden", !isSpotify);
+    drawerSpotifySectionEl.classList.toggle("hidden", !isSpotify || isManagedSpotifyConfigured());
   }
 }
 
@@ -3604,9 +3610,10 @@ function getSpotifySettings(workspaceId) {
   }
   const workspace = getWorkspace(workspaceId);
   const fallbackRedirectUri = `${window.location.origin}/`;
+  const managedSpotify = getManagedSpotifySettings();
   return {
-    clientId: String(stored.clientId || "").trim(),
-    redirectUri: String(stored.redirectUri || fallbackRedirectUri).trim() || fallbackRedirectUri,
+    clientId: String(stored.clientId || managedSpotify.clientId || "").trim(),
+    redirectUri: String(stored.redirectUri || managedSpotify.redirectUri || fallbackRedirectUri).trim() || fallbackRedirectUri,
     playerName: String(stored.playerName || `${workspace.label || workspace.id} Spotify`).trim() || `${workspace.label || workspace.id} Spotify`
   };
 }
@@ -3633,6 +3640,7 @@ function fillSpotifyForm(workspaceId) {
     return;
   }
 
+  const managedSpotify = isManagedSpotifyConfigured();
   const settings = getSpotifySettings(workspaceId);
   const fallbackRedirect = `${window.location.origin}/`;
   if (spotifyClientIdEl) {
@@ -3649,6 +3657,9 @@ function fillSpotifyForm(workspaceId) {
   }
   syncSpotifySaveButton();
   updateSpotifyStatus();
+  if (drawerSpotifySectionEl) {
+    drawerSpotifySectionEl.classList.toggle("hidden", managedSpotify);
+  }
 }
 
 function syncSpotifySaveButton() {
@@ -3799,8 +3810,11 @@ function updateSpotifyStatus(message = "") {
   const workspaceId = getDrawerWorkspaceId();
   const settings = getSpotifySettings(workspaceId);
   const session = getSpotifySession();
+  const managedSpotify = isManagedSpotifyConfigured();
   if (!settings.clientId || !settings.redirectUri) {
-    spotifyStatusEl.textContent = "Save your Spotify app client ID and redirect URI first.";
+    spotifyStatusEl.textContent = managedSpotify
+      ? "Sign in with Spotify to turn this into a browser player."
+      : "Save your Spotify app client ID and redirect URI first.";
     return;
   }
 
@@ -4376,6 +4390,15 @@ function openWeatherSettingsDrawer(workspaceId = appState.workspaceId) {
 }
 
 function openSpotifySettingsDrawer(workspaceId = appState.workspaceId) {
+  if (isManagedSpotifyConfigured()) {
+    if (workspaceSettingsWorkspaceEl) {
+      workspaceSettingsWorkspaceEl.value = workspaceId;
+    }
+    handleSpotifyLoginClick().catch((error) => {
+      console.warn("Unable to sign in to Spotify.", error);
+    });
+    return;
+  }
   openDrawer("spotify");
   if (workspaceSettingsWorkspaceEl) {
     workspaceSettingsWorkspaceEl.value = workspaceId;
@@ -5021,12 +5044,15 @@ function renderSpotify(workspace) {
   const playerState = getSpotifyPlaybackStateSnapshot();
   const playerReady = Boolean(appState.spotifyPlayerDeviceId);
   const hasSettings = Boolean(settings.clientId && settings.redirectUri);
+  const managedSpotify = isManagedSpotifyConfigured();
   const playLabel = !playerState || playerState.paused ? "Play" : "Pause";
   const searchState = getSpotifySearchState(workspaceId);
 
   if (spotifyHintEl) {
     spotifyHintEl.textContent = !hasSettings
-      ? "Save your Spotify app settings"
+      ? managedSpotify
+        ? "Login to Spotify"
+        : "Save your Spotify app settings"
       : !session?.accessToken
         ? "Sign in to listen"
         : session.product && session.product !== "premium"
@@ -5042,10 +5068,15 @@ function renderSpotify(workspace) {
         <div class="spotify-topline">
           <strong>Spotify</strong>
           <div class="spotify-topline-actions">
-            <button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Setup</button>
+            ${managedSpotify ? "" : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Setup</button>`}
           </div>
         </div>
-        <p class="spotify-status">Add your Spotify app client ID and redirect URI in the Widgets drawer to enable the player.</p>
+        <p class="spotify-status">${managedSpotify ? "Login to Spotify to use the browser player." : "Add your Spotify app client ID and redirect URI in the Widgets drawer to enable the player."}</p>
+        ${managedSpotify ? `
+          <div class="spotify-actions">
+            <button class="button button-primary button-compact" type="button" data-spotify-action="login">Login to Spotify</button>
+          </div>
+        ` : ""}
       </div>
     `;
   } else if (!session?.accessToken) {
@@ -5054,7 +5085,7 @@ function renderSpotify(workspace) {
         <div class="spotify-topline">
           <strong>Spotify</strong>
           <div class="spotify-topline-actions">
-            <button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Login</button>
+            ${managedSpotify ? `<span class="tag-chip tag-chip--spotify">Login</span>` : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Login</button>`}
           </div>
         </div>
         <p class="spotify-status">Sign in to Spotify to turn this into a browser player.</p>
@@ -5092,7 +5123,9 @@ function renderSpotify(workspace) {
         <div class="spotify-topline">
           <strong>${escapeHtml(getSpotifyPlayerLabel(workspaceId))}</strong>
           <div class="spotify-topline-actions">
-            <button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">${escapeHtml(session.product === "premium" ? "Premium" : "Spotify")}</button>
+            ${managedSpotify
+              ? `<span class="tag-chip tag-chip--spotify">${escapeHtml(session.product === "premium" ? "Premium" : "Spotify")}</span>`
+              : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">${escapeHtml(session.product === "premium" ? "Premium" : "Spotify")}</button>`}
           </div>
         </div>
         <div class="spotify-now-playing">
@@ -5151,7 +5184,11 @@ function renderSpotify(workspace) {
     button.addEventListener("click", () => {
       const action = button.dataset.spotifyAction;
       if (action === "open-settings") {
-        openSpotifySettingsDrawer(workspaceId);
+        if (isManagedSpotifyConfigured()) {
+          openSpotifySettingsDrawer(workspaceId);
+        } else {
+          openSpotifySettingsDrawer(workspaceId);
+        }
         return;
       }
       if (action === "login") {
@@ -5266,6 +5303,25 @@ function updateBackendSyncStatus(message = "") {
 
 function loadRuntimeConfig() {
   return window.__MYAXIS_RUNTIME_CONFIG__ || {};
+}
+
+function isManagedSpotifyConfigured() {
+  return Boolean(String(config.spotifyClientId || "").trim() && String(config.spotifyRedirectUri || "").trim());
+}
+
+function isManagedGoogleCalendarConfigured() {
+  return Boolean(String(config.googleClientId || "").trim());
+}
+
+function getManagedSpotifySettings() {
+  return {
+    clientId: String(config.spotifyClientId || "").trim(),
+    redirectUri: normalizeSpotifyRedirectUri(String(config.spotifyRedirectUri || "").trim() || `${window.location.origin}/`)
+  };
+}
+
+function getManagedGoogleCalendarClientId() {
+  return String(config.googleClientId || "").trim();
 }
 
 function persistBackendSyncConfig({ baseUrl = "", accessToken = "" }) {
@@ -6182,8 +6238,9 @@ function syncHomeCalendarSection(workspaceOrId) {
 
 function fillHomeCalendarForm(workspaceId) {
   const connection = getHomeCalendarConnection(workspaceId);
+  const clientId = getEffectiveGoogleCalendarClientId(connection);
   if (homeCalendarClientIdEl) {
-    homeCalendarClientIdEl.value = connection.clientId || "";
+    homeCalendarClientIdEl.value = clientId || "";
   }
   if (homeCalendarCalendarIdEl) {
     homeCalendarCalendarIdEl.value = (Array.isArray(connection.calendarIds) && connection.calendarIds.length
@@ -6194,10 +6251,10 @@ function fillHomeCalendarForm(workspaceId) {
     homeCalendarEnabledEl.checked = Boolean(connection.enabled);
   }
   if (homeCalendarSyncEl) {
-    homeCalendarSyncEl.disabled = !connection.clientId;
+    homeCalendarSyncEl.disabled = !clientId;
   }
   if (homeCalendarDisconnectEl) {
-    homeCalendarDisconnectEl.disabled = !connection.enabled && !connection.clientId && !getHomeCalendarCache(workspaceId).length;
+    homeCalendarDisconnectEl.disabled = !connection.enabled && !clientId && !getHomeCalendarCache(workspaceId).length;
   }
   if (homeCalendarStatusEl) {
     const status = connection.enabled
@@ -6231,13 +6288,17 @@ function handleHomeCalendarSubmit(event) {
     return;
   }
 
+  const managedClientId = getManagedGoogleCalendarClientId();
+  const managedGoogle = Boolean(managedClientId);
+  const currentConnection = getHomeCalendarConnection("home");
+
   const connection = {
     provider: "google",
     enabled: Boolean(homeCalendarEnabledEl.checked),
-    clientId: String(homeCalendarClientIdEl.value || "").trim(),
-    calendarIds: parseCalendarIdList(homeCalendarCalendarIdEl.value),
-    lastSyncAt: getHomeCalendarConnection("home").lastSyncAt || "",
-    lastError: getHomeCalendarConnection("home").lastError || ""
+    clientId: String(homeCalendarClientIdEl.value || managedClientId || "").trim(),
+    calendarIds: managedGoogle ? currentConnection.calendarIds : parseCalendarIdList(homeCalendarCalendarIdEl.value),
+    lastSyncAt: currentConnection.lastSyncAt || "",
+    lastError: currentConnection.lastError || ""
   };
 
   if (connection.enabled && !connection.clientId) {
@@ -6254,8 +6315,10 @@ function handleHomeCalendarSubmit(event) {
 }
 
 async function handleHomeCalendarSyncClick() {
-  const clientId = String(homeCalendarClientIdEl?.value || "").trim();
-  const calendarIds = parseCalendarIdList(homeCalendarCalendarIdEl?.value || "primary");
+  const managedGoogle = isManagedGoogleCalendarConfigured();
+  const currentConnection = getHomeCalendarConnection("home");
+  const clientId = String(homeCalendarClientIdEl?.value || getManagedGoogleCalendarClientId() || "").trim();
+  const calendarIds = managedGoogle ? currentConnection.calendarIds : parseCalendarIdList(homeCalendarCalendarIdEl?.value || "primary");
 
   if (!clientId) {
     window.alert("Add your Google OAuth client ID first.");
@@ -6290,9 +6353,10 @@ function disconnectHomeGoogleCalendar() {
 
 function getCalendarWidgetConnectionState(workspaceId) {
   const connection = getHomeCalendarConnection(workspaceId);
+  const clientId = getEffectiveGoogleCalendarClientId(connection);
   return {
     enabled: Boolean(connection.enabled),
-    clientId: String(connection.clientId || "").trim(),
+    clientId,
     calendarIds: Array.isArray(connection.calendarIds) && connection.calendarIds.length
       ? connection.calendarIds
       : parseCalendarIdList(connection.calendarId || "primary"),
@@ -6301,6 +6365,7 @@ function getCalendarWidgetConnectionState(workspaceId) {
 }
 
 function getCalendarWidgetStatus(workspaceId, connection = getHomeCalendarConnection(workspaceId)) {
+  const clientId = getEffectiveGoogleCalendarClientId(connection);
   if (connection.enabled) {
     return connection.lastError
       ? `Sync error: ${connection.lastError}`
@@ -6309,15 +6374,19 @@ function getCalendarWidgetStatus(workspaceId, connection = getHomeCalendarConnec
         : "Connected to Google Calendar. Sync now to import events.";
   }
 
-  return connection.clientId
-    ? "Calendar connection saved. Turn sync on when you're ready."
+  return clientId
+    ? "Calendar link ready. Connect or sync when you're ready."
     : "No calendar connected yet.";
 }
 
 function handleCalendarWidgetSettingsSave(workspaceId) {
-  const clientId = String(calendarSettingsEl?.querySelector('[data-calendar-settings-field="clientId"]')?.value || "").trim();
-  const calendarIds = parseCalendarIdList(calendarSettingsEl?.querySelector('[data-calendar-settings-field="calendarIds"]')?.value || "primary");
-  const enabled = Boolean(calendarSettingsEl?.querySelector('[data-calendar-settings-field="enabled"]')?.checked);
+  const managedGoogle = isManagedGoogleCalendarConfigured();
+  const currentConnection = getHomeCalendarConnection(workspaceId);
+  const clientId = String(calendarSettingsEl?.querySelector('[data-calendar-settings-field="clientId"]')?.value || getManagedGoogleCalendarClientId() || "").trim();
+  const calendarIds = managedGoogle
+    ? currentConnection.calendarIds
+    : parseCalendarIdList(calendarSettingsEl?.querySelector('[data-calendar-settings-field="calendarIds"]')?.value || "primary");
+  const enabled = Boolean(calendarSettingsEl?.querySelector('[data-calendar-settings-field="enabled"]')?.checked || managedGoogle);
 
   if (enabled && !clientId) {
     window.alert("Add your Google OAuth client ID before enabling sync.");
@@ -6334,13 +6403,20 @@ function handleCalendarWidgetSettingsSave(workspaceId) {
     console.warn("Unable to sync calendar connection to backend.", error);
   });
   renderWorkspace(getWorkspace(appState.workspaceId));
+  if (managedGoogle) {
+    return handleCalendarWidgetSettingsSync(workspaceId);
+  }
   return Promise.resolve();
 }
 
 async function handleCalendarWidgetSettingsSync(workspaceId) {
-  const clientId = String(calendarSettingsEl?.querySelector('[data-calendar-settings-field="clientId"]')?.value || "").trim();
-  const calendarIds = parseCalendarIdList(calendarSettingsEl?.querySelector('[data-calendar-settings-field="calendarIds"]')?.value || "primary");
-  const enabled = Boolean(calendarSettingsEl?.querySelector('[data-calendar-settings-field="enabled"]')?.checked);
+  const managedGoogle = isManagedGoogleCalendarConfigured();
+  const currentConnection = getHomeCalendarConnection(workspaceId);
+  const clientId = String(calendarSettingsEl?.querySelector('[data-calendar-settings-field="clientId"]')?.value || getManagedGoogleCalendarClientId() || "").trim();
+  const calendarIds = managedGoogle
+    ? currentConnection.calendarIds
+    : parseCalendarIdList(calendarSettingsEl?.querySelector('[data-calendar-settings-field="calendarIds"]')?.value || "primary");
+  const enabled = Boolean(calendarSettingsEl?.querySelector('[data-calendar-settings-field="enabled"]')?.checked || managedGoogle);
   if (!clientId) {
     window.alert("Add your Google OAuth client ID first.");
     return;
@@ -6369,7 +6445,7 @@ function disconnectWorkspaceGoogleCalendar(workspaceId) {
 function maybeSyncHomeCalendar(workspace) {
   const normalizedWorkspace = normalizeWorkspace(workspace);
   const connection = getHomeCalendarConnection(normalizedWorkspace.id);
-  if (!connection.enabled || !connection.clientId) {
+  if (!connection.enabled || !getEffectiveGoogleCalendarClientId(connection)) {
     return;
   }
 
@@ -6390,7 +6466,8 @@ async function syncHomeGoogleCalendar(workspaceId, options = {}) {
   }
 
   const connection = getHomeCalendarConnection(workspaceId);
-  if (!connection.enabled || !connection.clientId) {
+  const clientId = getEffectiveGoogleCalendarClientId(connection);
+  if (!connection.enabled || !clientId) {
     return;
   }
 
@@ -6399,7 +6476,7 @@ async function syncHomeGoogleCalendar(workspaceId, options = {}) {
 
   try {
     await loadGoogleIdentityScript();
-    const token = await getGoogleCalendarAccessToken(connection.clientId, Boolean(options.interactive));
+    const token = await getGoogleCalendarAccessToken(clientId, Boolean(options.interactive));
     const calendarIds = getHomeCalendarIds(connection);
     const eventBatches = await Promise.all(calendarIds.map((calendarId) => fetchGoogleCalendarEvents(calendarId, token.accessToken, appState.calendarAnchor)));
     const events = eventBatches.flat();
@@ -7141,7 +7218,7 @@ function getHomeCalendarConnection(workspaceId) {
     return {
       provider: "google",
       enabled: false,
-      clientId: "",
+      clientId: getManagedGoogleCalendarClientId(),
       calendarId: "primary",
       calendarIds: ["primary"],
       lastSyncAt: "",
@@ -7153,7 +7230,7 @@ function getHomeCalendarConnection(workspaceId) {
   return {
     provider: stored.provider === "google" ? "google" : "google",
     enabled: Boolean(stored.enabled),
-    clientId: String(stored.clientId || "").trim(),
+    clientId: String(stored.clientId || getManagedGoogleCalendarClientId() || "").trim(),
     calendarId: calendarIds[0] || "primary",
     calendarIds,
     lastSyncAt: String(stored.lastSyncAt || ""),
@@ -8805,7 +8882,11 @@ function mergeDashboardConfig(base, ...overrides) {
     "cognitoClientId",
     "cognitoHostedUiDomain",
     "cognitoRedirectUri",
-    "cognitoLogoutUri"
+    "cognitoLogoutUri",
+    "spotifyClientId",
+    "spotifyRedirectUri",
+    "googleClientId",
+    "googleRedirectUri"
   ];
 
   for (const override of overrides) {

@@ -30,7 +30,11 @@ runtime_config = {
     "cognitoClientId": os.environ.get("MYAXIS_COGNITO_CLIENT_ID", "").strip(),
     "cognitoHostedUiDomain": hosted_ui_domain,
     "cognitoRedirectUri": os.environ.get("MYAXIS_COGNITO_REDIRECT_URI", "").strip(),
-    "cognitoLogoutUri": os.environ.get("MYAXIS_COGNITO_LOGOUT_URI", "").strip()
+    "cognitoLogoutUri": os.environ.get("MYAXIS_COGNITO_LOGOUT_URI", "").strip(),
+    "spotifyClientId": os.environ.get("MYAXIS_SPOTIFY_CLIENT_ID", "").strip(),
+    "spotifyRedirectUri": os.environ.get("MYAXIS_SPOTIFY_REDIRECT_URI", "").strip(),
+    "googleClientId": os.environ.get("MYAXIS_GOOGLE_CLIENT_ID", "").strip(),
+    "googleRedirectUri": os.environ.get("MYAXIS_GOOGLE_REDIRECT_URI", "").strip()
 }
 (dist_dir / "runtime-config.js").write_text(
     "window.__MYAXIS_RUNTIME_CONFIG__ = " + json.dumps(runtime_config, indent=2) + ";\n",

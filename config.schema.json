@@ -46,6 +46,22 @@
       "type": "string",
       "description": "Optional redirect URI used after logout."
     },
+    "spotifyClientId": {
+      "type": "string",
+      "description": "Optional Spotify app client ID supplied by the deployment."
+    },
+    "spotifyRedirectUri": {
+      "type": "string",
+      "description": "Optional Spotify redirect URI supplied by the deployment."
+    },
+    "googleClientId": {
+      "type": "string",
+      "description": "Optional Google OAuth client ID supplied by the deployment."
+    },
+    "googleRedirectUri": {
+      "type": "string",
+      "description": "Optional Google redirect URI supplied by the deployment."
+    },
     "workspaces": {
       "type": "array",
       "minItems": 1,

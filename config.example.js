@@ -9,6 +9,10 @@ export default {
   cognitoHostedUiDomain: "",
   cognitoRedirectUri: "",
   cognitoLogoutUri: "",
+  spotifyClientId: "",
+  spotifyRedirectUri: "",
+  googleClientId: "",
+  googleRedirectUri: "",
   workspaces: [
     {
       id: "work",
