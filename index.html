@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <title>MyAxis</title>
-    <script src="./runtime-config.js?v=20260608-5"></script>
-    <link rel="stylesheet" href="./styles.css?v=20260608-5" />
+    <script src="./runtime-config.js?v=20260608-7"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260608-7" />
   </head>
   <body>
     <div class="shell">
@@ -28,6 +28,7 @@
             <span class="motivation-toggle-icon motivation-toggle-icon--show" aria-hidden="true">👁</span>
             <span class="motivation-toggle-icon motivation-toggle-icon--hide" aria-hidden="true">◌</span>
           </button>
+          <button class="button button-compact button-danger hidden" id="cognito-signout-top" type="button">Sign out</button>
           <details class="backup-menu">
             <summary class="button button-compact backup-menu-trigger" aria-label="Backup options" title="Backup options">
               <span aria-hidden="true">Backup</span>
@@ -96,7 +97,6 @@
               <button class="button button-compact" id="calendar-next" type="button">→</button>
             </div>
           </div>
-          <div class="calendar-settings hidden" id="calendar-settings"></div>
           <div class="calendar-shell">
             <div class="calendar-grid" id="calendar-grid"></div>
           </div>
@@ -322,32 +322,6 @@
           <p class="panel-hint" id="cognito-status">No sign-in configured yet.</p>
         </div>
 
-        <div class="drawer-subsection hidden" id="home-calendar-section">
-          <div class="drawer-section-header">
-            <h4>Calendar connection</h4>
-            <span class="panel-hint">Google Calendar sync for this workspace</span>
-          </div>
-          <form class="drawer-form" id="home-calendar-form">
-            <label>
-              Google Client ID
-              <input id="home-calendar-client-id" type="text" placeholder="apps.googleusercontent.com" />
-            </label>
-            <label>
-              Calendar IDs
-              <input id="home-calendar-calendar-id" type="text" placeholder="primary, work-calendar@group.calendar.google.com" />
-            </label>
-            <label class="drawer-checkbox">
-              <input id="home-calendar-enabled" type="checkbox" />
-              <span>Enable sync for this workspace</span>
-            </label>
-            <div class="drawer-actions">
-              <button class="button button-primary" id="home-calendar-save" type="submit">Save connection</button>
-              <button class="button" id="home-calendar-sync" type="button">Sync now</button>
-              <button class="button button-danger" id="home-calendar-disconnect" type="button">Disconnect</button>
-            </div>
-          </form>
-          <p class="panel-hint" id="home-calendar-status">No calendar connected yet.</p>
-        </div>
       </div>
 
       <div class="drawer-section" id="drawer-widget-section">
@@ -584,6 +558,20 @@
       </div>
     </aside>
 
+    <section class="calendar-link-modal hidden" id="calendar-link-modal" aria-hidden="true" aria-label="Calendar link dialog">
+      <div class="calendar-link-modal__backdrop" data-action="close-calendar-link-modal"></div>
+      <div class="calendar-link-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="calendar-link-modal-title">
+        <div class="calendar-link-modal__header">
+          <div>
+            <p class="eyebrow">Calendar link</p>
+            <h3 id="calendar-link-modal-title">Connect a calendar for this workspace</h3>
+          </div>
+          <button class="button" id="calendar-link-modal-close" type="button">Close</button>
+        </div>
+        <div class="calendar-settings" id="calendar-settings"></div>
+      </div>
+    </section>
+
     <section class="auth-gate hidden" id="auth-gate" aria-label="Sign in to MyAxis">
       <div class="auth-gate-card">
         <p class="eyebrow">MyAxis cloud access</p>
@@ -598,6 +586,6 @@
       </div>
     </section>
 
-    <script type="module" src="./app.js?v=20260608-5"></script>
+    <script type="module" src="./app.js?v=20260608-8"></script>
   </body>
 </html>

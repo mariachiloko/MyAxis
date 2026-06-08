@@ -172,6 +172,7 @@ const importButtonEl = document.getElementById("import-backup");
 const backupFileEl = document.getElementById("backup-file");
 const themeToggleEl = document.getElementById("theme-toggle");
 const motivationToggleEl = document.getElementById("motivation-toggle");
+const cognitoSignoutTopEl = document.getElementById("cognito-signout-top");
 const motivationTileEl = document.getElementById("motivation-sticky");
 const layoutEl = document.querySelector ? document.querySelector(".layout") : null;
 const motivationQuoteEl = document.getElementById("motivation-quote");
@@ -215,6 +216,8 @@ const authGateEl = document.getElementById("auth-gate");
 const authGateLoginEl = document.getElementById("auth-gate-login");
 const authGateStatusEl = document.getElementById("auth-gate-status");
 const homeCalendarSectionEl = document.getElementById("home-calendar-section");
+const calendarLinkModalEl = document.getElementById("calendar-link-modal");
+const calendarLinkModalCloseEl = document.getElementById("calendar-link-modal-close");
 const drawerWidgetSectionEl = document.getElementById("drawer-widget-section");
 const drawerWeatherSectionEl = document.getElementById("drawer-weather-section");
 const drawerSpotifySectionEl = document.getElementById("drawer-spotify-section");
@@ -392,8 +395,10 @@ function wireThemeControls() {
   if (motivationToggleEl) {
     motivationToggleEl.addEventListener("click", toggleMotivationVisibility);
   }
+  cognitoSignoutTopEl?.addEventListener("click", handleCognitoLogoutClick);
   updateThemeToggleLabel();
   updateMotivationToggleLabel();
+  updateTopSignOutButton();
 }
 
 function wireCalendarControls() {
@@ -402,13 +407,7 @@ function wireCalendarControls() {
   calendarPrevEl.addEventListener("click", () => shiftCalendar(-1));
   calendarNextEl.addEventListener("click", () => shiftCalendar(1));
   calendarLinkEl?.addEventListener("click", () => {
-    if (isManagedGoogleCalendarConfigured()) {
-      handleCalendarWidgetSettingsSync(appState.workspaceId).catch((error) => {
-        console.warn("Unable to link calendar.", error);
-      });
-      return;
-    }
-    toggleCalendarWidgetSettings(appState.workspaceId);
+    openCalendarLinkDrawer(appState.workspaceId);
   });
   schedulePrevEl.addEventListener("click", () => shiftScheduleDay(-1));
   scheduleNextEl.addEventListener("click", () => shiftScheduleDay(1));
@@ -458,6 +457,12 @@ function wireDrawerControls() {
   widgetsOpenEl?.addEventListener("click", () => openDrawer("widgets"));
   settingsCloseEl.addEventListener("click", closeDrawer);
   drawerBackdropEl.addEventListener("click", closeDrawer);
+  calendarLinkModalCloseEl?.addEventListener("click", closeCalendarLinkModal);
+  calendarLinkModalEl?.addEventListener("click", (event) => {
+    if (event.target?.dataset.action === "close-calendar-link-modal") {
+      closeCalendarLinkModal();
+    }
+  });
   calendarNewEl.addEventListener("click", () => openCalendarEditor("", appState.workspaceId));
   taskNewEl.addEventListener("click", () => {
     if (appState.workspaceId === "home") {
@@ -480,13 +485,13 @@ function wireDrawerControls() {
   workspaceCreateFormEl?.addEventListener("submit", handleWorkspaceCreateSubmit);
   workspaceCreateFormEl?.addEventListener("input", syncWorkspaceCreateForm);
   workspaceCreateFormEl?.addEventListener("change", syncWorkspaceCreateForm);
-  homeCalendarFormEl.addEventListener("submit", handleHomeCalendarSubmit);
-  homeCalendarSyncEl.addEventListener("click", () => {
+  homeCalendarFormEl?.addEventListener("submit", handleHomeCalendarSubmit);
+  homeCalendarSyncEl?.addEventListener("click", () => {
     handleHomeCalendarSyncClick().catch((error) => {
       console.warn("Home calendar sync click failed.", error);
     });
   });
-  homeCalendarDisconnectEl.addEventListener("click", disconnectHomeGoogleCalendar);
+  homeCalendarDisconnectEl?.addEventListener("click", disconnectHomeGoogleCalendar);
   taskFormEl.addEventListener("submit", handleTaskSubmit);
   taskFormClearEl.addEventListener("click", () => openTaskEditor("", taskFormWorkspaceEl.value || appState.workspaceId));
   taskFormDeleteEl.addEventListener("click", deleteTaskFromEditor);
@@ -695,6 +700,29 @@ function setCalendarSettingsOpen(workspaceId, open) {
 
 function toggleCalendarWidgetSettings(workspaceId) {
   setCalendarSettingsOpen(workspaceId, !getStoredCalendarSettingsOpen(workspaceId));
+}
+
+function openCalendarLinkDrawer(workspaceId = appState.workspaceId) {
+  localStorage.setItem(getCalendarSettingsOpenKey(workspaceId), "true");
+  renderWorkspace(getWorkspace(appState.workspaceId));
+  if (!calendarLinkModalEl) {
+    return;
+  }
+
+  calendarLinkModalEl.classList.remove("hidden");
+  calendarLinkModalEl.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+  calendarLinkModalCloseEl?.focus();
+}
+
+function closeCalendarLinkModal() {
+  if (!calendarLinkModalEl) {
+    return;
+  }
+
+  calendarLinkModalEl.classList.add("hidden");
+  calendarLinkModalEl.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
 }
 
 function renderSchedule(schedule, calendarEvents = []) {
@@ -1322,7 +1350,6 @@ function renderCalendar(events) {
   calendarGridEl.innerHTML = renderData.html;
 
   if (calendarSettingsEl) {
-    calendarSettingsEl.classList.remove("hidden");
     calendarSettingsEl.innerHTML = renderCalendarSettingsMarkup(workspace, connection, settingsOpen);
   }
 
@@ -3617,7 +3644,9 @@ function getSpotifySettings(workspaceId) {
     }));
   }
   const workspace = getWorkspace(workspaceId);
-  const fallbackRedirectUri = `${window.location.origin}/`;
+  const fallbackRedirectUri = window.location.protocol === "file:"
+    ? "http://127.0.0.1:8000/"
+    : `${window.location.origin}/`;
   const managedSpotify = getManagedSpotifySettings();
   return {
     clientId: String(stored.clientId || managedSpotify.clientId || "").trim(),
@@ -3755,11 +3784,13 @@ function shouldShowCognitoGate() {
 function showCognitoGate() {
   document.body.classList.add("auth-gated");
   authGateEl?.classList.remove("hidden");
+  updateTopSignOutButton();
 }
 
 function hideCognitoGate() {
   document.body.classList.remove("auth-gated");
   authGateEl?.classList.add("hidden");
+  updateTopSignOutButton();
 }
 
 function updateAuthGateStatus() {
@@ -3771,6 +3802,7 @@ function updateAuthGateStatus() {
     authGateStatusEl.textContent = "Signed in. Loading your dashboard.";
     authGateLoginEl?.setAttribute("aria-disabled", "true");
     authGateLoginEl?.setAttribute("tabindex", "-1");
+    updateTopSignOutButton();
     return;
   }
 
@@ -3792,6 +3824,15 @@ function updateAuthGateStatus() {
       authGateStatusEl.textContent = "Unable to prepare Cognito sign-in yet.";
     }
   });
+  updateTopSignOutButton();
+}
+
+function updateTopSignOutButton() {
+  if (!cognitoSignoutTopEl) {
+    return;
+  }
+
+  cognitoSignoutTopEl.classList.toggle("hidden", !getStoredCognitoSession());
 }
 
 async function prepareCognitoGateLoginUrl() {
@@ -5077,7 +5118,7 @@ function renderSpotify(workspace) {
           <strong>Spotify</strong>
           <div class="spotify-topline-actions">
             ${managedSpotify
-              ? `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="login" aria-label="Login to Spotify">Login to Spotify</button>`
+              ? `<span class="tag-chip tag-chip--spotify">Login to Spotify</span>`
               : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Setup</button>`}
           </div>
         </div>
@@ -5096,7 +5137,7 @@ function renderSpotify(workspace) {
           <strong>Spotify</strong>
           <div class="spotify-topline-actions">
             ${managedSpotify
-              ? `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="login" aria-label="Login to Spotify">Login to Spotify</button>`
+              ? `<span class="tag-chip tag-chip--spotify">Login to Spotify</span>`
               : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Login</button>`}
           </div>
         </div>

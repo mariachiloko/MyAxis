@@ -2269,6 +2269,50 @@ body.capture-follow-side-right .widget-panel[data-widget-id="capture"].is-follow
   flex-wrap: wrap;
 }
 
+.calendar-link-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.calendar-link-modal.hidden {
+  display: none !important;
+}
+
+.calendar-link-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.calendar-link-modal__dialog {
+  position: relative;
+  z-index: 1;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(90vh, 860px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 28px;
+  background: linear-gradient(180deg, var(--panel-strong), var(--surface));
+  box-shadow: var(--shadow);
+}
+
+.calendar-link-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.calendar-link-modal .calendar-settings {
+  margin-top: 18px;
+}
+
 @media (max-width: 1100px) {
   .panel,
   .panel-wide {
