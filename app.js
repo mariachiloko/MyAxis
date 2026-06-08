@@ -5318,22 +5318,31 @@ function loadRuntimeConfig() {
 }
 
 function isManagedSpotifyConfigured() {
-  return Boolean(String(config.spotifyClientId || "").trim() && String(config.spotifyRedirectUri || "").trim());
+  return Boolean(String(runtimeConfig.spotifyClientId || "").trim() && String(runtimeConfig.spotifyRedirectUri || "").trim());
 }
 
 function isManagedGoogleCalendarConfigured() {
-  return Boolean(String(config.googleClientId || "").trim());
+  return Boolean(String(runtimeConfig.googleClientId || "").trim());
 }
 
 function getManagedSpotifySettings() {
   return {
-    clientId: String(config.spotifyClientId || "").trim(),
-    redirectUri: normalizeSpotifyRedirectUri(String(config.spotifyRedirectUri || "").trim() || `${window.location.origin}/`)
+    clientId: String(runtimeConfig.spotifyClientId || "").trim(),
+    redirectUri: normalizeSpotifyRedirectUri(String(runtimeConfig.spotifyRedirectUri || "").trim() || `${window.location.origin}/`)
   };
 }
 
 function getManagedGoogleCalendarClientId() {
-  return String(config.googleClientId || "").trim();
+  return String(runtimeConfig.googleClientId || "").trim();
+}
+
+function getEffectiveGoogleCalendarClientId(connection = null) {
+  const managedClientId = getManagedGoogleCalendarClientId();
+  if (managedClientId) {
+    return managedClientId;
+  }
+
+  return String(connection?.clientId || "").trim();
 }
 
 function persistBackendSyncConfig({ baseUrl = "", accessToken = "" }) {
