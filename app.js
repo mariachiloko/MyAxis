@@ -35,6 +35,7 @@ const STORAGE_KEYS = {
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOME_MENU_SLOTS = ["Breakfast", "Lunch", "Dinner"];
+const MAX_WORKSPACES = 6;
 const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 const GOOGLE_GIS_SRC = "https://accounts.google.com/gsi/client";
 const SPOTIFY_SCOPES = "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state";
@@ -76,6 +77,7 @@ const DEFAULT_WIDGET_VISIBILITY = {
 };
 const LAYOUT_SPANS = [4, 6, 8, 12];
 const LEGACY_DEFAULT_LAYOUT_ORDER = ["hero", "schedule", "calendar", "kanban", "spotlight", "goals", "capture"];
+const BUILT_IN_WORKSPACE_IDS = new Set(defaultConfig.workspaces.map((workspace) => workspace.id));
 
 let localConfig = await loadLocalConfig();
 let runtimeConfig = loadRuntimeConfig();
@@ -95,6 +97,7 @@ const appState = {
   editingEvent: null,
   editingStory: null,
   editingFlashcard: null,
+  workspaceCreateInitialized: false,
   homeCalendarSyncInFlight: false,
   theme: getInitialTheme(),
   motivationVisible: getInitialMotivationVisibility(),
@@ -132,6 +135,7 @@ const scheduleListEl = document.getElementById("schedule-list");
 const scheduleRangeLabelEl = document.getElementById("schedule-range-label");
 const scheduleRangeDetailEl = document.getElementById("schedule-range-detail");
 const calendarGridEl = document.getElementById("calendar-grid");
+const calendarSettingsEl = document.getElementById("calendar-settings");
 const kanbanBoardEl = document.getElementById("kanban-board");
 const kanbanTitleEl = document.getElementById("kanban-title");
 const kanbanHintEl = document.getElementById("kanban-hint");
@@ -170,6 +174,7 @@ const motivationTileEl = document.getElementById("motivation-sticky");
 const layoutEl = document.querySelector ? document.querySelector(".layout") : null;
 const motivationQuoteEl = document.getElementById("motivation-quote");
 const settingsOpenEl = document.getElementById("settings-open");
+const workspaceCreateOpenEl = document.getElementById("workspace-create-open");
 const widgetsOpenEl = document.getElementById("widgets-open");
 const settingsCloseEl = document.getElementById("settings-close");
 const drawerBackdropEl = document.getElementById("drawer-backdrop");
@@ -186,6 +191,7 @@ const flashcardNewEl = document.getElementById("flashcard-new");
 const spotlightTitleEl = document.getElementById("spotlight-title");
 const drawerTitleEl = document.getElementById("drawer-title");
 const drawerWorkspaceSectionEl = document.getElementById("drawer-workspace-section");
+const workspaceCreateSectionEl = document.getElementById("workspace-create-section");
 const backendSyncFormEl = document.getElementById("backend-sync-form");
 const backendSyncBaseUrlEl = document.getElementById("backend-sync-base-url");
 const backendSyncSaveEl = document.getElementById("backend-sync-save");
@@ -221,6 +227,17 @@ const workspaceSettingsAccentEl = document.getElementById("workspace-settings-ac
 const workspaceSettingsAccent2El = document.getElementById("workspace-settings-accent2");
 const workspaceSettingsDefaultEl = document.getElementById("workspace-settings-default");
 const workspaceSettingsResetEl = document.getElementById("workspace-settings-reset");
+const workspaceSettingsDeleteEl = document.getElementById("workspace-settings-delete");
+const workspaceCreateFormEl = document.getElementById("workspace-create-form");
+const workspaceCreateNameEl = document.getElementById("workspace-create-name");
+const workspaceCreateTitleEl = document.getElementById("workspace-create-title");
+const workspaceCreateDescriptionEl = document.getElementById("workspace-create-description");
+const workspaceCreateBoardTypeEl = document.getElementById("workspace-create-board-type");
+const workspaceCreateAccentEl = document.getElementById("workspace-create-accent");
+const workspaceCreateAccent2El = document.getElementById("workspace-create-accent2");
+const workspaceCreateWidgetListEl = document.getElementById("workspace-create-widget-list");
+const workspaceCreateSubmitEl = document.getElementById("workspace-create-submit");
+const workspaceCreateCountEl = document.getElementById("workspace-create-count");
 const homeCalendarFormEl = document.getElementById("home-calendar-form");
 const homeCalendarClientIdEl = document.getElementById("home-calendar-client-id");
 const homeCalendarCalendarIdEl = document.getElementById("home-calendar-calendar-id");
@@ -372,9 +389,7 @@ function wireCalendarControls() {
   calendarPrevEl.addEventListener("click", () => shiftCalendar(-1));
   calendarNextEl.addEventListener("click", () => shiftCalendar(1));
   calendarLinkEl?.addEventListener("click", () => {
-    openDrawer("workspace");
-    workspaceSettingsWorkspaceEl.value = appState.workspaceId;
-    fillWorkspaceSettingsForm(appState.workspaceId);
+    toggleCalendarWidgetSettings(appState.workspaceId);
   });
   schedulePrevEl.addEventListener("click", () => shiftScheduleDay(-1));
   scheduleNextEl.addEventListener("click", () => shiftScheduleDay(1));
@@ -420,6 +435,7 @@ function renderColumnOptions(workspaceId) {
 
 function wireDrawerControls() {
   settingsOpenEl.addEventListener("click", () => openDrawer("workspace"));
+  workspaceCreateOpenEl?.addEventListener("click", () => openWorkspaceCreateDrawer());
   widgetsOpenEl?.addEventListener("click", () => openDrawer("widgets"));
   settingsCloseEl.addEventListener("click", closeDrawer);
   drawerBackdropEl.addEventListener("click", closeDrawer);
@@ -441,6 +457,10 @@ function wireDrawerControls() {
   });
   workspaceSettingsFormEl.addEventListener("submit", handleWorkspaceSettingsSubmit);
   workspaceSettingsResetEl.addEventListener("click", resetWorkspaceOverrides);
+  workspaceSettingsDeleteEl.addEventListener("click", handleWorkspaceDeleteClick);
+  workspaceCreateFormEl?.addEventListener("submit", handleWorkspaceCreateSubmit);
+  workspaceCreateFormEl?.addEventListener("input", syncWorkspaceCreateForm);
+  workspaceCreateFormEl?.addEventListener("change", syncWorkspaceCreateForm);
   homeCalendarFormEl.addEventListener("submit", handleHomeCalendarSubmit);
   homeCalendarSyncEl.addEventListener("click", () => {
     handleHomeCalendarSyncClick().catch((error) => {
@@ -635,6 +655,23 @@ function renderWorkspace(activeWorkspace) {
   applyCaptureFollowLayout(activeWorkspace.id);
   syncWidgetLibrary();
   syncDrawerSelections();
+}
+
+function getCalendarSettingsOpenKey(workspaceId) {
+  return `workspace-dashboard:calendar-settings-open:${workspaceId}`;
+}
+
+function getStoredCalendarSettingsOpen(workspaceId) {
+  return localStorage.getItem(getCalendarSettingsOpenKey(workspaceId)) === "true";
+}
+
+function setCalendarSettingsOpen(workspaceId, open) {
+  localStorage.setItem(getCalendarSettingsOpenKey(workspaceId), String(Boolean(open)));
+  renderWorkspace(getWorkspace(appState.workspaceId));
+}
+
+function toggleCalendarWidgetSettings(workspaceId) {
+  setCalendarSettingsOpen(workspaceId, !getStoredCalendarSettingsOpen(workspaceId));
 }
 
 function renderSchedule(schedule, calendarEvents = []) {
@@ -998,19 +1035,27 @@ function renderWeather(workspace) {
     button.addEventListener("click", () => {
       if (button.dataset.weatherAction === "refresh") {
         refreshWeather(workspace.id, true);
+        return;
+      }
+      if (button.dataset.weatherAction === "open-settings") {
+        openWeatherSettingsDrawer(workspace.id);
       }
     });
   });
 
-  refreshWeather(workspace.id, false).catch((error) => {
-    console.warn("Unable to refresh weather.", error);
-  });
+  if (!cached?.loading) {
+    refreshWeather(workspace.id, false).catch((error) => {
+      console.warn("Unable to refresh weather.", error);
+    });
+  }
 }
 
 function renderWeatherMarkup({ settings, weather, loading }) {
   const locationLabel = weather?.locationLabel || settings.city || "Chicago, IL";
   const currentSummary = weather
-    ? `${weather.temperature}° ${weather.unit} · ${weather.summary}`
+    ? loading
+      ? `Refreshing weather for ${locationLabel}...`
+      : `${weather.temperature}° ${weather.unit} · ${weather.summary}`
     : loading
       ? "Loading weather..."
       : "Pick a city or use your current location.";
@@ -1020,7 +1065,9 @@ function renderWeatherMarkup({ settings, weather, loading }) {
     <div class="weather-card">
       <div class="weather-card-top">
         <strong>${escapeHtml(locationLabel)}</strong>
-        <span class="tag-chip tag-chip--weather">${escapeHtml(settings.useLocation ? "Location" : "City")}</span>
+        <div class="weather-card-top-actions">
+          <button class="tag-chip tag-chip--weather tag-chip--button" type="button" data-weather-action="open-settings" aria-label="Open weather settings">${escapeHtml(settings.useLocation ? "Location" : "City")}</button>
+        </div>
       </div>
       <div class="weather-temperature">${escapeHtml(weather ? `${weather.temperature}°` : "--")}</div>
       <p class="weather-summary">${escapeHtml(currentSummary)}</p>
@@ -1029,7 +1076,7 @@ function renderWeatherMarkup({ settings, weather, loading }) {
         <span>${escapeHtml(updatedLabel)}</span>
       </div>
       <div class="weather-actions">
-        <button class="button button-compact" type="button" data-weather-action="refresh">Refresh</button>
+        <button class="button button-compact" type="button" data-weather-action="refresh" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "Refreshing..." : "Refresh")}</button>
       </div>
     </div>
   `;
@@ -1046,63 +1093,75 @@ async function refreshWeather(workspaceId, force = false) {
   const requestId = appState.weatherRequestId + 1;
   appState.weatherRequestId = requestId;
 
-  const location = await resolveWeatherLocation(settings);
-  if (requestId !== appState.weatherRequestId) {
-    return null;
-  }
+  saveWeatherCache(workspaceId, {
+    cacheKey,
+    updatedAt: Date.now(),
+    data: cache?.data || null,
+    loading: true
+  });
+  renderWeather(getWorkspace(workspaceId));
 
-  if (!location) {
+  try {
+    const location = await resolveWeatherLocation(settings);
+    if (requestId !== appState.weatherRequestId) {
+      return null;
+    }
+
+    if (!location) {
+      saveWeatherCache(workspaceId, {
+        cacheKey,
+        updatedAt: Date.now(),
+        data: null,
+        loading: false
+      });
+      renderWeather(getWorkspace(workspaceId));
+      return null;
+    }
+
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", String(location.latitude));
+    url.searchParams.set("longitude", String(location.longitude));
+    url.searchParams.set("current", "temperature_2m,weather_code,apparent_temperature,wind_speed_10m");
+    url.searchParams.set("temperature_unit", "fahrenheit");
+    url.searchParams.set("wind_speed_unit", "mph");
+    url.searchParams.set("timezone", "auto");
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      throw new Error(`Weather request failed (${response.status})`);
+    }
+
+    const payload = await response.json();
+    const current = payload?.current || {};
+    const weather = {
+      locationLabel: location.label,
+      temperature: Math.round(Number(current.temperature_2m || current.apparent_temperature || 0)),
+      feelsLike: Math.round(Number(current.apparent_temperature || current.temperature_2m || 0)),
+      summary: getWeatherCodeLabel(current.weather_code),
+      unit: "F",
+      updatedAt: new Date().toISOString()
+    };
+
     saveWeatherCache(workspaceId, {
       cacheKey,
       updatedAt: Date.now(),
-      data: null,
+      data: weather,
+      loading: false
+    });
+    if (requestId === appState.weatherRequestId) {
+      renderWeather(getWorkspace(workspaceId));
+    }
+    return weather;
+  } catch (error) {
+    saveWeatherCache(workspaceId, {
+      cacheKey,
+      updatedAt: Date.now(),
+      data: cache?.data || null,
       loading: false
     });
     renderWeather(getWorkspace(workspaceId));
-    return null;
+    throw error;
   }
-
-  saveWeatherCache(workspaceId, {
-    cacheKey,
-    updatedAt: Date.now(),
-    data: null,
-    loading: true
-  });
-
-  const url = new URL("https://api.open-meteo.com/v1/forecast");
-  url.searchParams.set("latitude", String(location.latitude));
-  url.searchParams.set("longitude", String(location.longitude));
-  url.searchParams.set("current", "temperature_2m,weather_code,apparent_temperature,wind_speed_10m");
-  url.searchParams.set("temperature_unit", "fahrenheit");
-  url.searchParams.set("wind_speed_unit", "mph");
-  url.searchParams.set("timezone", "auto");
-
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`Weather request failed (${response.status})`);
-  }
-
-  const payload = await response.json();
-  const current = payload?.current || {};
-  const weather = {
-    locationLabel: location.label,
-    temperature: Math.round(Number(current.temperature_2m || current.apparent_temperature || 0)),
-    feelsLike: Math.round(Number(current.apparent_temperature || current.temperature_2m || 0)),
-    summary: getWeatherCodeLabel(current.weather_code),
-    unit: "F",
-    updatedAt: new Date().toISOString()
-  };
-
-  saveWeatherCache(workspaceId, {
-    cacheKey,
-    updatedAt: Date.now(),
-    data: weather,
-    loading: false
-  });
-  if (requestId === appState.weatherRequestId) {
-    renderWeather(getWorkspace(workspaceId));
-  }
-  return weather;
 }
 
 function getWeatherCodeLabel(code) {
@@ -1219,6 +1278,9 @@ async function sendAssistantMessage(workspaceId, prompt) {
 }
 
 function renderCalendar(events) {
+  const workspace = getWorkspace(appState.workspaceId);
+  const connection = getHomeCalendarConnection(workspace.id);
+  const settingsOpen = getStoredCalendarSettingsOpen(workspace.id);
   const anchor = new Date(appState.calendarAnchor);
   const isWeekView = appState.calendarView === "week";
   const renderData = isWeekView ? buildWeekView(events, anchor) : buildMonthView(events, anchor);
@@ -1235,6 +1297,43 @@ function renderCalendar(events) {
   calendarGridEl.classList.toggle("calendar-grid--week", isWeekView);
   calendarGridEl.classList.toggle("calendar-grid--month", !isWeekView);
   calendarGridEl.innerHTML = renderData.html;
+
+  if (calendarSettingsEl) {
+    calendarSettingsEl.classList.remove("hidden");
+    calendarSettingsEl.innerHTML = renderCalendarSettingsMarkup(workspace, connection, settingsOpen);
+  }
+
+  calendarSettingsEl?.querySelectorAll("[data-calendar-settings-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.calendarSettingsAction;
+      if (action === "toggle") {
+        toggleCalendarWidgetSettings(workspace.id);
+        return;
+      }
+      if (action === "save") {
+        handleCalendarWidgetSettingsSave(workspace.id).catch((error) => {
+          console.warn("Unable to save calendar connection.", error);
+        });
+        return;
+      }
+      if (action === "sync") {
+        handleCalendarWidgetSettingsSync(workspace.id).catch((error) => {
+          console.warn("Unable to sync calendar connection.", error);
+        });
+        return;
+      }
+      if (action === "disconnect") {
+        disconnectWorkspaceGoogleCalendar(workspace.id);
+      }
+    });
+  });
+
+  calendarSettingsEl?.querySelectorAll("[data-calendar-settings-field]").forEach((input) => {
+    input.addEventListener("input", () => {
+    });
+    input.addEventListener("change", () => {
+    });
+  });
 
   calendarGridEl.onclick = (event) => {
     const actionButton = event.target.closest("[data-action]");
@@ -1285,6 +1384,59 @@ function renderCalendar(events) {
         break;
     }
   };
+}
+
+function renderCalendarSettingsMarkup(workspace, connection, open) {
+  const connected = Boolean(connection.enabled && connection.clientId);
+  const calendarIds = Array.isArray(connection.calendarIds) && connection.calendarIds.length
+    ? connection.calendarIds.join(", ")
+    : connection.calendarId || "primary";
+  const status = getCalendarWidgetStatus(workspace.id, connection);
+
+  if (!open && !connected) {
+    return `
+      <div class="calendar-connection-card">
+        <div class="calendar-connection-top">
+          <strong>Calendar connection</strong>
+          <button class="mini-button" type="button" data-calendar-settings-action="toggle">Link calendar</button>
+        </div>
+        <p class="calendar-connection-status">${escapeHtml(status)}</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="calendar-connection-card">
+      <div class="calendar-connection-top">
+        <strong>Calendar connection</strong>
+        <button class="mini-button" type="button" data-calendar-settings-action="toggle">${open ? "Hide" : "Link calendar"}</button>
+      </div>
+      ${open ? `
+        <div class="drawer-form calendar-connection-form">
+          <label>
+            Google client ID
+            <input type="text" data-calendar-settings-field="clientId" value="${escapeHtml(connection.clientId || "")}" placeholder="Google OAuth client ID" />
+          </label>
+          <label>
+            Calendar IDs
+            <input type="text" data-calendar-settings-field="calendarIds" value="${escapeHtml(calendarIds)}" placeholder="primary" />
+          </label>
+          <label class="drawer-checkbox">
+            <input type="checkbox" data-calendar-settings-field="enabled" ${connection.enabled ? "checked" : ""} />
+            <span>Enable calendar sync for this workspace</span>
+          </label>
+          <div class="drawer-actions">
+            <button class="button button-primary" type="button" data-calendar-settings-action="save">Save</button>
+            <button class="button" type="button" data-calendar-settings-action="sync" ${connection.clientId ? "" : "disabled"}>Sync now</button>
+            <button class="button button-danger" type="button" data-calendar-settings-action="disconnect" ${!connected && !getHomeCalendarCache(workspace.id).length ? "disabled" : ""}>Disconnect</button>
+          </div>
+          <p class="panel-hint">${escapeHtml(status)}</p>
+        </div>
+      ` : `
+        <p class="calendar-connection-status">${escapeHtml(status)}</p>
+      `}
+    </div>
+  `;
 }
 
 function calendarEventClass(type) {
@@ -1462,21 +1614,22 @@ function getSelectedScheduleDate() {
 }
 
 function renderKanban(workspace) {
-  if (workspace.id === "home") {
-    renderHomeWorkspace(workspace);
+  const boardConfig = getWorkspaceBoardConfig(workspace);
+  if (boardConfig.kind === "home") {
+    renderHomeWorkspace(workspace, boardConfig);
     return;
   }
 
   const state = getKanbanState(workspace);
   kanbanBoardEl.classList.remove("home-view");
   if (kanbanTitleEl) {
-    kanbanTitleEl.textContent = "Kanban";
+    kanbanTitleEl.textContent = boardConfig.title;
   }
   if (kanbanHintEl) {
-    kanbanHintEl.textContent = "Drag cards between columns";
+    kanbanHintEl.textContent = boardConfig.hint;
   }
   if (taskNewEl) {
-    taskNewEl.textContent = "Add task";
+    taskNewEl.textContent = boardConfig.buttonLabel;
   }
   kanbanBoardEl.innerHTML = workspace.kanban
     .map((column) => {
@@ -1641,19 +1794,19 @@ function renderKanban(workspace) {
   };
 }
 
-function renderHomeWorkspace(workspace) {
+function renderHomeWorkspace(workspace, boardConfig = null) {
   const homeState = getHomeState(workspace);
   const selectedMenuDay = getStoredHomeMenuDay(workspace.id);
   const selectedMenu = Array.isArray(homeState.menuByDay?.[selectedMenuDay]) ? homeState.menuByDay[selectedMenuDay] : [];
   kanbanBoardEl.classList.add("home-view");
   if (kanbanTitleEl) {
-    kanbanTitleEl.textContent = "Home";
+    kanbanTitleEl.textContent = boardConfig?.title || "Home";
   }
   if (kanbanHintEl) {
-    kanbanHintEl.textContent = "To-do list, groceries, and menu";
+    kanbanHintEl.textContent = boardConfig?.hint || "To-do list, groceries, and menu";
   }
   if (taskNewEl) {
-    taskNewEl.textContent = "Add to-do";
+    taskNewEl.textContent = boardConfig?.buttonLabel || "Add to-do";
   }
 
   kanbanBoardEl.innerHTML = `
@@ -2989,12 +3142,15 @@ function openDrawer(mode = "workspace") {
   settingsDrawerEl.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
   syncDrawerMode();
-  if (mode === "workspace") {
+  if (mode === "workspace" || mode === "workspace-create") {
+    appState.workspaceCreateInitialized = false;
     clearTransientEditorState();
     fillTaskForm(appState.workspaceId, "");
     fillCalendarForm(appState.workspaceId, "");
     fillStoryForm(appState.workspaceId, "");
     fillFlashcardForm(appState.workspaceId, "");
+    seedWorkspaceCreateForm();
+    syncWorkspaceCreateForm();
   }
   syncDrawerSelections();
   settingsCloseEl.focus();
@@ -3007,6 +3163,231 @@ function closeDrawer() {
   settingsDrawerEl.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   clearTransientEditorState();
+}
+
+function openWorkspaceCreateDrawer() {
+  openDrawer("workspace-create");
+  workspaceCreateSectionEl?.classList.remove("hidden");
+  seedWorkspaceCreateForm();
+  syncWorkspaceCreateForm();
+  workspaceCreateNameEl?.focus();
+  workspaceCreateSectionEl?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
+
+function seedWorkspaceCreateForm() {
+  if (!workspaceCreateFormEl || appState.workspaceCreateInitialized) {
+    return;
+  }
+
+  const templateWorkspace = getWorkspace(appState.workspaceId);
+  if (workspaceCreateNameEl) {
+    workspaceCreateNameEl.value = "";
+  }
+  if (workspaceCreateTitleEl) {
+    workspaceCreateTitleEl.value = "";
+  }
+  if (workspaceCreateDescriptionEl) {
+    workspaceCreateDescriptionEl.value = "";
+  }
+  if (workspaceCreateBoardTypeEl) {
+    workspaceCreateBoardTypeEl.value = getWorkspaceBoardType(templateWorkspace);
+  }
+  if (workspaceCreateAccentEl) {
+    workspaceCreateAccentEl.value = normalizeHexColor(templateWorkspace.accent || defaultConfig.workspaces[0].accent);
+  }
+  if (workspaceCreateAccent2El) {
+    workspaceCreateAccent2El.value = normalizeHexColor(templateWorkspace.accent2 || defaultConfig.workspaces[0].accent2);
+  }
+  renderWorkspaceCreateWidgetList();
+  appState.workspaceCreateInitialized = true;
+}
+
+function renderWorkspaceCreateWidgetList() {
+  if (!workspaceCreateWidgetListEl) {
+    return;
+  }
+
+  const items = Object.keys(DEFAULT_WIDGET_VISIBILITY)
+    .map((widgetId) => {
+      const checked = true;
+      return `
+        <label class="drawer-checkbox widget-library-item">
+          <input type="checkbox" data-create-widget-toggle="${escapeHtml(widgetId)}" ${checked ? "checked" : ""} />
+          <span>${escapeHtml(getWidgetVisibilityLabel(widgetId))}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  workspaceCreateWidgetListEl.innerHTML = items;
+}
+
+function syncWorkspaceCreateForm() {
+  if (!workspaceCreateFormEl) {
+    return;
+  }
+
+  const workspaceCount = config.workspaces.length;
+  if (workspaceCreateCountEl) {
+    const remaining = Math.max(0, MAX_WORKSPACES - workspaceCount);
+    workspaceCreateCountEl.textContent = workspaceCount >= MAX_WORKSPACES
+      ? `${workspaceCount} / ${MAX_WORKSPACES} workspaces used`
+      : `${workspaceCount} / ${MAX_WORKSPACES} workspaces used`;
+    workspaceCreateCountEl.title = remaining ? `${remaining} workspace${remaining === 1 ? "" : "s"} left` : "Maximum workspaces reached";
+  }
+
+  const nameValue = String(workspaceCreateNameEl?.value || "").trim();
+  const id = slugify(nameValue);
+  const hasDuplicate = Boolean(id) && config.workspaces.some((workspace) => workspace.id === id);
+  const canCreate = workspaceCount < MAX_WORKSPACES && Boolean(nameValue) && !hasDuplicate;
+
+  if (workspaceCreateSubmitEl) {
+    workspaceCreateSubmitEl.disabled = !canCreate;
+    workspaceCreateSubmitEl.textContent = workspaceCount >= MAX_WORKSPACES ? "Maximum reached" : "Create workspace";
+    workspaceCreateSubmitEl.title = workspaceCount >= MAX_WORKSPACES
+      ? "You already have the maximum number of workspaces."
+      : hasDuplicate
+        ? "That workspace name is already in use."
+        : "Create workspace";
+  }
+}
+
+function getWorkspaceCount() {
+  return config.workspaces.length;
+}
+
+function isBuiltInWorkspace(workspaceId) {
+  return BUILT_IN_WORKSPACE_IDS.has(workspaceId);
+}
+
+function getWorkspaceCreateWidgetVisibility() {
+  const visibility = {};
+  for (const widgetId of Object.keys(DEFAULT_WIDGET_VISIBILITY)) {
+    visibility[widgetId] = true;
+  }
+
+  workspaceCreateWidgetListEl?.querySelectorAll("[data-create-widget-toggle]").forEach((input) => {
+    visibility[input.dataset.createWidgetToggle] = Boolean(input.checked);
+  });
+
+  return visibility;
+}
+
+function getWorkspaceBoardType(workspace) {
+  const boardType = String(workspace?.boardType || "").trim().toLowerCase();
+  if (boardType === "home" || boardType === "menu" || boardType === "tasks" || boardType === "chores" || boardType === "kanban") {
+    return boardType;
+  }
+  return workspace?.id === "home" ? "home" : "kanban";
+}
+
+function getWorkspaceBoardConfig(workspace) {
+  const boardType = getWorkspaceBoardType(workspace);
+  if (boardType === "home" || boardType === "menu") {
+    return {
+      kind: "home",
+      title: boardType === "menu" ? "Menu" : "Home",
+      hint: boardType === "menu" ? "Daily menu and groceries" : "To-do list, groceries, and menu",
+      buttonLabel: "Add to-do"
+    };
+  }
+
+  if (boardType === "chores") {
+    return {
+      kind: "kanban",
+      title: "Chores",
+      hint: "Drag chores between columns",
+      buttonLabel: "Add chore"
+    };
+  }
+
+  if (boardType === "tasks") {
+    return {
+      kind: "kanban",
+      title: "Tasks",
+      hint: "Drag cards between columns",
+      buttonLabel: "Add task"
+    };
+  }
+
+  return {
+    kind: "kanban",
+    title: "Task board",
+    hint: "Drag cards between columns",
+    buttonLabel: "Add task"
+  };
+}
+
+function getWorkspaceTemplate(workspaceId, label, title, description, accent, accent2, boardType = "kanban") {
+  return {
+    id: workspaceId,
+    label,
+    eyebrow: "",
+    title,
+    description,
+    boardType,
+    accent,
+    accent2,
+    stats: [],
+    schedule: [],
+    kanban: [
+      { id: "todo", title: "To-do", cards: [] },
+      { id: "in-progress", title: "In progress", cards: [] },
+      { id: "done", title: "Done", cards: [] }
+    ],
+    calendar: [],
+    spotlight: {
+      type: "flashcards",
+      title: "",
+      hint: "",
+      cards: []
+    },
+    goals: [],
+    quote: "",
+    captureHint: "",
+    scratchpadKey: `dashboard-scratchpad-${workspaceId}`
+  };
+}
+
+async function deleteWorkspaceBackendState(workspaceId) {
+  const backendSync = getBackendSyncConfig();
+  if (!backendSync.baseUrl) {
+    return;
+  }
+
+  await Promise.allSettled([
+    backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/settings`, { method: "DELETE" }),
+    backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/state`, { method: "DELETE" }),
+    backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/calendar-connection`, { method: "DELETE" })
+  ]);
+}
+
+function clearWorkspaceStorage(workspaceId, workspace = getWorkspace(workspaceId)) {
+  const keys = [
+    workspace.scratchpadKey,
+    getWidgetVisibilityStorageKey(workspaceId),
+    getWeatherSettingsStorageKey(workspaceId),
+    getWeatherCacheStorageKey(workspaceId),
+    getHomeCalendarConnectionStorageKey(workspaceId),
+    getHomeCalendarCacheStorageKey(workspaceId),
+    getHiddenCalendarEventsStorageKey(workspaceId),
+    getCalendarTodoStorageKey(workspaceId),
+    getCaptureModeStorageKey(workspaceId),
+    getCaptureFollowStorageKey(workspaceId),
+    getCaptureFollowSideStorageKey(workspaceId),
+    getCaptureCalculatorStorageKey(workspaceId),
+    getCaptureBoardStorageKey(workspaceId),
+    getCaptureAssistantStorageKey(workspaceId),
+    getFlashcardStorageKey(workspaceId),
+    getKanbanStorageKey(workspaceId),
+    getScheduleStorageKey(workspaceId),
+    getHomeStorageKey(workspaceId),
+    getHomeMenuDayStorageKey(workspaceId)
+  ];
+
+  for (const key of keys.filter(Boolean)) {
+    localStorage.removeItem(key);
+  }
 }
 
 function clearTransientEditorState() {
@@ -3033,6 +3414,10 @@ function syncDrawerSelections() {
   }
 
   fillWorkspaceSettingsForm(workspaceSettingsWorkspaceEl.value || appState.workspaceId);
+  if (appState.drawerMode === "workspace-create") {
+    seedWorkspaceCreateForm();
+    syncWorkspaceCreateForm();
+  }
   fillBackendSyncForm();
   fillCognitoSettingsForm();
   fillWeatherForm(getDrawerWorkspaceId());
@@ -3070,28 +3455,37 @@ function syncDrawerSelections() {
 function syncDrawerMode() {
   const mode = appState.drawerMode;
   const isWorkspace = mode === "workspace" || mode === "settings";
+  const isWorkspaceCreate = mode === "workspace-create";
   const isWidgets = mode === "widgets";
+  const isWeather = mode === "weather";
+  const isSpotify = mode === "spotify";
   const isTask = mode === "task";
   const isSchedule = mode === "schedule";
   const isCalendar = mode === "calendar";
   const isStory = mode === "story";
   const isFlashcard = mode === "flashcard";
 
-  drawerTitleEl.textContent = isWorkspace ? "Workspace settings" : isWidgets ? "Widgets" : isTask ? "Task editor" : isSchedule ? "Schedule editor" : isCalendar ? "Calendar editor" : isStory ? "Work story editor" : "Flashcard editor";
-  drawerWorkspaceSectionEl.classList.toggle("hidden", !isWorkspace);
+  drawerTitleEl.textContent = isWorkspace ? "Workspace settings" : isWorkspaceCreate ? "New workspace" : isWidgets ? "Widgets" : isWeather ? "Weather" : isSpotify ? "Spotify" : isTask ? "Task editor" : isSchedule ? "Schedule editor" : isCalendar ? "Calendar editor" : isStory ? "Work story editor" : "Flashcard editor";
+  drawerWorkspaceSectionEl.classList.toggle("hidden", !(isWorkspace || isWorkspaceCreate));
+  if (workspaceSettingsFormEl) {
+    workspaceSettingsFormEl.classList.toggle("hidden", isWorkspaceCreate);
+  }
+  if (workspaceCreateSectionEl) {
+    workspaceCreateSectionEl.classList.toggle("hidden", !isWorkspaceCreate);
+  }
   drawerTaskSectionEl.classList.toggle("hidden", !isTask);
   drawerScheduleSectionEl.classList.toggle("hidden", !isSchedule);
   drawerCalendarSectionEl.classList.toggle("hidden", !isCalendar);
   drawerStorySectionEl.classList.toggle("hidden", !isStory);
   drawerFlashcardSectionEl.classList.toggle("hidden", !isFlashcard);
   if (drawerWidgetSectionEl) {
-    drawerWidgetSectionEl.classList.toggle("hidden", !(isWorkspace || isWidgets));
+    drawerWidgetSectionEl.classList.toggle("hidden", !isWidgets);
   }
   if (drawerWeatherSectionEl) {
-    drawerWeatherSectionEl.classList.toggle("hidden", !(isWorkspace || isWidgets));
+    drawerWeatherSectionEl.classList.toggle("hidden", !isWeather);
   }
   if (drawerSpotifySectionEl) {
-    drawerSpotifySectionEl.classList.toggle("hidden", !(isWorkspace || isWidgets));
+    drawerSpotifySectionEl.classList.toggle("hidden", !isSpotify);
   }
 }
 
@@ -3104,6 +3498,11 @@ function fillWorkspaceSettingsForm(workspaceId) {
   workspaceSettingsAccentEl.value = normalizeHexColor(workspace.accent || defaultConfig.workspaces[0].accent);
   workspaceSettingsAccent2El.value = normalizeHexColor(workspace.accent2 || defaultConfig.workspaces[0].accent2);
   workspaceSettingsDefaultEl.value = config.defaultWorkspace || defaultConfig.defaultWorkspace || config.workspaces[0].id;
+  if (workspaceSettingsDeleteEl) {
+    const builtIn = isBuiltInWorkspace(workspace.id);
+    workspaceSettingsDeleteEl.disabled = builtIn;
+    workspaceSettingsDeleteEl.title = builtIn ? "Built-in workspaces cannot be deleted." : "Delete this custom workspace.";
+  }
   syncHomeCalendarSection(workspace);
   fillWeatherForm(workspace.id);
   fillSpotifyForm(workspace.id);
@@ -3477,6 +3876,7 @@ function disconnectSpotifyPlayer(workspaceId) {
   appState.spotifyPlaybackQueue = [];
   appState.spotifyPlaybackQueueIndex = -1;
   appState.spotifyPlaybackQueueSeedTrackUri = "";
+  appState.spotifyAutoAdvanceLock = false;
 }
 
 function clearSpotifyPlaylistAdvanceTimer() {
@@ -3662,20 +4062,48 @@ function getSpotifyQueueCurrentTrack() {
 function scheduleSpotifyPlaybackAdvance(workspaceId) {
   clearSpotifyPlaylistAdvanceTimer();
   const state = appState.spotifyPlayerState;
-  if (!state || state.paused || !state.track?.uri) {
+  if (!state || !state.track?.uri) {
     return;
   }
 
   const remaining = Math.max(0, Number(state.duration || 0) - Number(state.position || 0));
-  if (!Number.isFinite(remaining) || remaining <= 0) {
+  if (!Number.isFinite(remaining)) {
+    return;
+  }
+
+  const isNearEnd = remaining <= 2000;
+  if (state.paused) {
+    if (!isNearEnd || appState.spotifyAutoAdvanceLock) {
+      return;
+    }
+
+    appState.spotifyAutoAdvanceLock = true;
+    appState.spotifyPlaylistAdvanceTimer = window.setTimeout(() => {
+      advanceSpotifyPlaybackQueue(workspaceId, 1)
+        .catch((error) => {
+          console.warn("Unable to auto-advance Spotify playback.", error);
+        })
+        .finally(() => {
+          appState.spotifyAutoAdvanceLock = false;
+        });
+    }, 250);
+    return;
+  }
+
+  if (remaining <= 0) {
     return;
   }
 
   const delay = Math.max(250, remaining + 120);
   appState.spotifyPlaylistAdvanceTimer = window.setTimeout(() => {
-    advanceSpotifyPlaybackQueue(workspaceId, 1).catch((error) => {
-      console.warn("Unable to auto-advance Spotify playback.", error);
-    });
+    appState.spotifyAutoAdvanceLock = true;
+    advanceSpotifyPlaybackQueue(workspaceId, 1)
+      .catch((error) => {
+        console.warn("Unable to auto-advance Spotify playback.", error);
+      })
+      .finally(() => {
+        appState.spotifyAutoAdvanceLock = false;
+      });
   }, delay);
 }
 
@@ -3833,6 +4261,26 @@ async function handleSpotifyRedirect() {
   }
 }
 
+function openWeatherSettingsDrawer(workspaceId = appState.workspaceId) {
+  openDrawer("weather");
+  if (workspaceSettingsWorkspaceEl) {
+    workspaceSettingsWorkspaceEl.value = workspaceId;
+  }
+  fillWeatherForm(workspaceId);
+  drawerWeatherSectionEl?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  weatherCityEl?.focus?.();
+}
+
+function openSpotifySettingsDrawer(workspaceId = appState.workspaceId) {
+  openDrawer("spotify");
+  if (workspaceSettingsWorkspaceEl) {
+    workspaceSettingsWorkspaceEl.value = workspaceId;
+  }
+  fillSpotifyForm(workspaceId);
+  drawerSpotifySectionEl?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  spotifyClientIdEl?.focus?.();
+}
+
 async function handleSpotifyLoginClick() {
   const workspaceId = getDrawerWorkspaceId();
   const settings = getSpotifySettings(workspaceId);
@@ -3842,6 +4290,7 @@ async function handleSpotifyLoginClick() {
   }
 
   saveSpotifySettings(workspaceId, settings);
+  updateSpotifyStatus("Redirecting to Spotify sign-in...");
   const transaction = await createSpotifyTransaction();
   saveSpotifyTransaction({
     ...transaction,
@@ -4114,6 +4563,7 @@ async function ensureSpotifyPlayer(workspaceId, interactive = false) {
         }
       } else {
         clearSpotifyPlaylistAdvanceTimer();
+        appState.spotifyAutoAdvanceLock = false;
       }
       renderSpotify(getWorkspace(workspaceId));
     });
@@ -4487,7 +4937,9 @@ function renderSpotify(workspace) {
       <div class="spotify-shell spotify-shell--empty">
         <div class="spotify-topline">
           <strong>Spotify</strong>
-          <span class="tag-chip tag-chip--spotify">Setup</span>
+          <div class="spotify-topline-actions">
+            <button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Setup</button>
+          </div>
         </div>
         <p class="spotify-status">Add your Spotify app client ID and redirect URI in the Widgets drawer to enable the player.</p>
       </div>
@@ -4497,7 +4949,9 @@ function renderSpotify(workspace) {
       <div class="spotify-shell spotify-shell--empty">
         <div class="spotify-topline">
           <strong>Spotify</strong>
-          <span class="tag-chip tag-chip--spotify">Login</span>
+          <div class="spotify-topline-actions">
+            <button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Login</button>
+          </div>
         </div>
         <p class="spotify-status">Sign in to Spotify to turn this into a browser player.</p>
         <div class="spotify-actions">
@@ -4513,7 +4967,7 @@ function renderSpotify(workspace) {
       ? `<img class="spotify-art" src="${escapeHtml(track.imageUrl)}" alt="" />`
       : `<div class="spotify-art spotify-art--placeholder">♪</div>`;
     const renderSpotifyItem = (item) => `
-      <button class="spotify-result" type="button" data-spotify-action="play-track" data-spotify-item-type="${escapeHtml(item.type)}" data-spotify-uri="${escapeHtml(item.uri)}" data-spotify-name="${escapeHtml(item.name)}" data-spotify-image="${escapeHtml(item.imageUrl || "")}" data-spotify-owner="${escapeHtml(item.album || "")}">
+      <button class="spotify-result" type="button" data-spotify-action="play-track" data-spotify-item-type="${escapeHtml(item.type)}" data-spotify-uri="${escapeHtml(item.uri)}" data-spotify-name="${escapeHtml(item.name)}" data-spotify-artists="${escapeHtml((item.artists || []).join("||"))}" data-spotify-image="${escapeHtml(item.imageUrl || "")}" data-spotify-owner="${escapeHtml(item.album || "")}" data-spotify-duration="${escapeHtml(String(item.duration || 0))}">
         ${item.imageUrl ? `<img class="spotify-result-art spotify-result-art--image" src="${escapeHtml(item.imageUrl)}" alt="" />` : `<span class="spotify-result-art">${escapeHtml((item.name || "?").slice(0, 1).toUpperCase())}</span>`}
         <span class="spotify-result-copy">
           <strong>${escapeHtml(item.name)}</strong>
@@ -4533,7 +4987,9 @@ function renderSpotify(workspace) {
       <div class="spotify-shell spotify-shell--player">
         <div class="spotify-topline">
           <strong>${escapeHtml(getSpotifyPlayerLabel(workspaceId))}</strong>
-          <span class="tag-chip tag-chip--spotify">${escapeHtml(session.product === "premium" ? "Premium" : "Spotify")}</span>
+          <div class="spotify-topline-actions">
+            <button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">${escapeHtml(session.product === "premium" ? "Premium" : "Spotify")}</button>
+          </div>
         </div>
         <div class="spotify-now-playing">
           ${imageMarkup}
@@ -4591,6 +5047,7 @@ function renderSpotify(workspace) {
     button.addEventListener("click", () => {
       const action = button.dataset.spotifyAction;
       if (action === "open-settings") {
+        openSpotifySettingsDrawer(workspaceId);
         return;
       }
       if (action === "login") {
@@ -4627,7 +5084,15 @@ function renderSpotify(workspace) {
       if (action === "play-track") {
         const item = {
           type: "track",
-          uri: button.dataset.spotifyUri || ""
+          uri: button.dataset.spotifyUri || "",
+          name: button.dataset.spotifyName || "",
+          artists: String(button.dataset.spotifyArtists || "")
+            .split("||")
+            .map((artist) => artist.trim())
+            .filter(Boolean),
+          album: button.dataset.spotifyOwner || "",
+          imageUrl: button.dataset.spotifyImage || "",
+          duration: Number(button.dataset.spotifyDuration || 0)
         };
         if (!item.uri) {
           return;
@@ -5375,6 +5840,10 @@ function normalizeBackendWorkspaceSettings(settings) {
     normalized.accent2 = normalizeHexColor(settings.accent2);
   }
 
+  if (String(settings.boardType || "").trim()) {
+    normalized.boardType = getWorkspaceBoardType({ boardType: settings.boardType });
+  }
+
   for (const key of ["stats", "schedule", "kanban", "calendar", "goals"]) {
     if (Array.isArray(settings[key])) {
       normalized[key] = settings[key];
@@ -5425,6 +5894,7 @@ function getWorkspaceBackendSnapshot(workspaceId) {
       eyebrow: workspace.eyebrow || "",
       title: workspace.title || "",
       description: workspace.description || "",
+      boardType: getWorkspaceBoardType(workspace),
       accent: workspace.accent || "",
       accent2: workspace.accent2 || "",
       stats: Array.isArray(workspace.stats) ? workspace.stats : [],
@@ -5583,7 +6053,7 @@ function syncHomeCalendarSection(workspaceOrId) {
   }
 
   const workspace = typeof workspaceOrId === "string" ? getWorkspace(workspaceOrId) : normalizeWorkspace(workspaceOrId);
-  homeCalendarSectionEl.classList.remove("hidden");
+  homeCalendarSectionEl.classList.add("hidden");
   fillHomeCalendarForm(workspace.id);
 }
 
@@ -5695,12 +6165,86 @@ function disconnectHomeGoogleCalendar() {
   renderWorkspace(getWorkspace(appState.workspaceId));
 }
 
-function maybeSyncHomeCalendar(workspace) {
-  const normalizedWorkspace = normalizeWorkspace(workspace);
-  if (normalizedWorkspace.id !== "home") {
+function getCalendarWidgetConnectionState(workspaceId) {
+  const connection = getHomeCalendarConnection(workspaceId);
+  return {
+    enabled: Boolean(connection.enabled),
+    clientId: String(connection.clientId || "").trim(),
+    calendarIds: Array.isArray(connection.calendarIds) && connection.calendarIds.length
+      ? connection.calendarIds
+      : parseCalendarIdList(connection.calendarId || "primary"),
+    calendarId: String(connection.calendarId || "primary").trim() || "primary"
+  };
+}
+
+function getCalendarWidgetStatus(workspaceId, connection = getHomeCalendarConnection(workspaceId)) {
+  if (connection.enabled) {
+    return connection.lastError
+      ? `Sync error: ${connection.lastError}`
+      : connection.lastSyncAt
+        ? `Connected to Google Calendar. Last sync: ${formatRelativeSyncTime(connection.lastSyncAt)}`
+        : "Connected to Google Calendar. Sync now to import events.";
+  }
+
+  return connection.clientId
+    ? "Calendar connection saved. Turn sync on when you're ready."
+    : "No calendar connected yet.";
+}
+
+function handleCalendarWidgetSettingsSave(workspaceId) {
+  const clientId = String(calendarSettingsEl?.querySelector('[data-calendar-settings-field="clientId"]')?.value || "").trim();
+  const calendarIds = parseCalendarIdList(calendarSettingsEl?.querySelector('[data-calendar-settings-field="calendarIds"]')?.value || "primary");
+  const enabled = Boolean(calendarSettingsEl?.querySelector('[data-calendar-settings-field="enabled"]')?.checked);
+
+  if (enabled && !clientId) {
+    window.alert("Add your Google OAuth client ID before enabling sync.");
+    return Promise.resolve();
+  }
+
+  saveHomeCalendarConnection(workspaceId, {
+    ...getHomeCalendarConnection(workspaceId),
+    enabled,
+    clientId,
+    calendarIds
+  });
+  syncHomeCalendarConnectionToBackend(workspaceId).catch((error) => {
+    console.warn("Unable to sync calendar connection to backend.", error);
+  });
+  renderWorkspace(getWorkspace(appState.workspaceId));
+  return Promise.resolve();
+}
+
+async function handleCalendarWidgetSettingsSync(workspaceId) {
+  const clientId = String(calendarSettingsEl?.querySelector('[data-calendar-settings-field="clientId"]')?.value || "").trim();
+  const calendarIds = parseCalendarIdList(calendarSettingsEl?.querySelector('[data-calendar-settings-field="calendarIds"]')?.value || "primary");
+  const enabled = Boolean(calendarSettingsEl?.querySelector('[data-calendar-settings-field="enabled"]')?.checked);
+  if (!clientId) {
+    window.alert("Add your Google OAuth client ID first.");
     return;
   }
 
+  saveHomeCalendarConnection(workspaceId, {
+    ...getHomeCalendarConnection(workspaceId),
+    enabled: true,
+    clientId,
+    calendarIds
+  });
+  syncHomeCalendarConnectionToBackend(workspaceId).catch((error) => {
+    console.warn("Unable to sync calendar connection to backend.", error);
+  });
+  await syncHomeGoogleCalendar(workspaceId, { interactive: true });
+}
+
+function disconnectWorkspaceGoogleCalendar(workspaceId) {
+  clearHomeCalendarConnection(workspaceId);
+  syncHomeCalendarConnectionToBackend(workspaceId).catch((error) => {
+    console.warn("Unable to delete calendar connection from backend.", error);
+  });
+  renderWorkspace(getWorkspace(appState.workspaceId));
+}
+
+function maybeSyncHomeCalendar(workspace) {
+  const normalizedWorkspace = normalizeWorkspace(workspace);
   const connection = getHomeCalendarConnection(normalizedWorkspace.id);
   if (!connection.enabled || !connection.clientId) {
     return;
@@ -6520,7 +7064,7 @@ function getWeatherCacheKey(workspaceId, settings) {
 function getWeatherSettings(workspaceId) {
   const stored = readStoredJson(getWeatherSettingsStorageKey(workspaceId), null);
   return {
-    useLocation: Boolean(stored?.useLocation),
+    useLocation: stored ? Boolean(stored.useLocation) : true,
     city: String(stored?.city || "Chicago, IL").trim() || "Chicago, IL"
   };
 }
@@ -6539,7 +7083,19 @@ function getWeatherCacheStorageKey(workspaceId) {
 }
 
 function getWeatherCache(workspaceId) {
-  return readStoredJson(getWeatherCacheStorageKey(workspaceId), null);
+  const cache = readStoredJson(getWeatherCacheStorageKey(workspaceId), null);
+  if (!cache || typeof cache !== "object") {
+    return cache;
+  }
+
+  if (cache.loading && Number(cache.updatedAt || 0) && Date.now() - Number(cache.updatedAt || 0) > 30_000) {
+    return {
+      ...cache,
+      loading: false
+    };
+  }
+
+  return cache;
 }
 
 function saveWeatherCache(workspaceId, payload) {
@@ -7410,6 +7966,127 @@ function handleWorkspaceSettingsSubmit(event) {
   });
 }
 
+async function handleWorkspaceCreateSubmit(event) {
+  event.preventDefault();
+
+  const workspaceCount = getWorkspaceCount();
+  if (workspaceCount >= MAX_WORKSPACES) {
+    window.alert(`You can only have ${MAX_WORKSPACES} workspaces.`);
+    return;
+  }
+
+  const label = String(workspaceCreateNameEl?.value || "").trim();
+  if (!label) {
+    window.alert("Give the new workspace a name.");
+    return;
+  }
+
+  const workspaceId = slugify(label);
+  if (!workspaceId) {
+    window.alert("Use a workspace name with at least one letter or number.");
+    return;
+  }
+
+  if (config.workspaces.some((workspace) => workspace.id === workspaceId)) {
+    window.alert("That workspace name is already in use. Pick a different name.");
+    return;
+  }
+
+  const currentWorkspace = getWorkspace(appState.workspaceId);
+  const title = String(workspaceCreateTitleEl?.value || "").trim() || `Track ${label.toLowerCase()} in one place`;
+  const description = String(workspaceCreateDescriptionEl?.value || "").trim() || `Keep the important pieces of ${label.toLowerCase()} together.`;
+  const boardType = getWorkspaceBoardType({
+    id: workspaceId,
+    boardType: String(workspaceCreateBoardTypeEl?.value || "").trim() || "kanban"
+  });
+  const accent = normalizeHexColor(workspaceCreateAccentEl?.value || currentWorkspace.accent || defaultConfig.workspaces[0].accent);
+  const accent2 = normalizeHexColor(workspaceCreateAccent2El?.value || currentWorkspace.accent2 || defaultConfig.workspaces[0].accent2);
+  const workspace = getWorkspaceTemplate(workspaceId, label, title, description, accent, accent2, boardType);
+  setWorkspaceOverride(workspaceId, workspace);
+
+  const visibility = getWorkspaceCreateWidgetVisibility();
+  saveWidgetVisibilityState(workspaceId, visibility);
+
+  config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
+  populateEditorSelects();
+  localStorage.setItem(STORAGE_KEYS.selectedWorkspace, workspaceId);
+  appState.workspaceId = workspaceId;
+  appState.editorWorkspaceId = workspaceId;
+  appState.flashcardIndex = 0;
+  appState.answerVisible = false;
+  appState.workspaceCreateInitialized = false;
+  if (workspaceSettingsWorkspaceEl) {
+    workspaceSettingsWorkspaceEl.value = workspaceId;
+  }
+
+  renderTabs();
+  renderWorkspace(getWorkspace(workspaceId));
+  fillWorkspaceSettingsForm(workspaceId);
+  closeDrawer();
+
+  syncWorkspaceSettingsToBackend(workspaceId).catch((error) => {
+    console.warn("Unable to sync new workspace settings to backend.", error);
+  });
+  syncWorkspaceStateToBackend(workspaceId).catch((error) => {
+    console.warn("Unable to sync new workspace state to backend.", error);
+  });
+}
+
+async function handleWorkspaceDeleteClick() {
+  const workspaceId = workspaceSettingsWorkspaceEl.value;
+  if (!workspaceId) {
+    return;
+  }
+
+  if (isBuiltInWorkspace(workspaceId)) {
+    window.alert("Built-in workspaces cannot be deleted.");
+    return;
+  }
+
+  const workspace = getWorkspace(workspaceId);
+  if (!window.confirm(`Delete the ${workspace.label || workspaceId} workspace? This removes its local dashboard data from this browser.`)) {
+    return;
+  }
+
+  const fallbackWorkspace = getWorkspaceIdOrFallback(defaultConfig.defaultWorkspace || defaultConfig.workspaces[0].id);
+
+  uiOverrides = readStoredJson(STORAGE_KEYS.uiOverrides, {});
+  const workspaces = Array.isArray(uiOverrides.workspaces) ? uiOverrides.workspaces.filter((item) => item.id !== workspaceId) : [];
+  uiOverrides = {
+    ...uiOverrides,
+    workspaces
+  };
+  persistUiOverrides();
+
+  clearWorkspaceStorage(workspaceId, workspace);
+  try {
+    await deleteWorkspaceBackendState(workspaceId);
+  } catch (error) {
+    console.warn("Unable to delete workspace state from backend.", error);
+  }
+
+  if (config.defaultWorkspace === workspaceId) {
+    setAppDefaultWorkspace(fallbackWorkspace);
+  }
+
+  config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
+  populateEditorSelects();
+
+  const nextWorkspaceId = config.workspaces.some((item) => item.id === appState.workspaceId)
+    ? appState.workspaceId
+    : fallbackWorkspace;
+  appState.workspaceId = nextWorkspaceId;
+  localStorage.setItem(STORAGE_KEYS.selectedWorkspace, nextWorkspaceId);
+  appState.editorWorkspaceId = nextWorkspaceId;
+  if (workspaceSettingsWorkspaceEl) {
+    workspaceSettingsWorkspaceEl.value = nextWorkspaceId;
+  }
+  renderTabs();
+  fillWorkspaceSettingsForm(nextWorkspaceId);
+  renderWorkspace(getWorkspace(nextWorkspaceId));
+  closeDrawer();
+}
+
 function resetWorkspaceOverrides() {
   if (!window.confirm("Reset all custom workspace overrides stored in this browser?")) {
     return;
@@ -8125,8 +8802,21 @@ function normalizeWorkspace(workspace) {
 
   return {
     ...workspace,
+    eyebrow: String(workspace.eyebrow || ""),
+    title: String(workspace.title || ""),
+    description: String(workspace.description || ""),
+    boardType: getWorkspaceBoardType(workspace),
+    accent: normalizeHexColor(workspace.accent || defaultConfig.workspaces[0].accent),
+    accent2: normalizeHexColor(workspace.accent2 || defaultConfig.workspaces[0].accent2),
+    stats: Array.isArray(workspace.stats) ? workspace.stats : [],
+    schedule: Array.isArray(workspace.schedule) ? workspace.schedule : [],
     kanban: normalizedKanban,
-    calendar: normalizedCalendar
+    calendar: normalizedCalendar,
+    spotlight: workspace.spotlight && typeof workspace.spotlight === "object" ? workspace.spotlight : { type: "flashcards", title: "", hint: "", cards: [] },
+    goals: Array.isArray(workspace.goals) ? workspace.goals : [],
+    quote: String(workspace.quote || ""),
+    captureHint: String(workspace.captureHint || ""),
+    scratchpadKey: String(workspace.scratchpadKey || `dashboard-scratchpad-${workspace.id}`)
   };
 }
 

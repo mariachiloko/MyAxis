@@ -38,6 +38,7 @@
               <button class="button button-compact" id="import-backup" type="button">Import</button>
             </div>
           </details>
+          <button class="button button-compact" id="workspace-create-open" type="button">New workspace</button>
           <button class="button button-compact button-primary" id="settings-open" type="button">Settings</button>
           <button class="button button-compact" id="widgets-open" type="button">Widgets</button>
           <aside class="motivation-light" id="motivation-sticky" aria-live="polite">
@@ -95,6 +96,7 @@
               <button class="button button-compact" id="calendar-next" type="button">→</button>
             </div>
           </div>
+          <div class="calendar-settings hidden" id="calendar-settings"></div>
           <div class="calendar-shell">
             <div class="calendar-grid" id="calendar-grid"></div>
           </div>
@@ -211,8 +213,56 @@
           <div class="drawer-actions">
             <button class="button button-primary" type="submit">Save workspace</button>
             <button class="button" id="workspace-settings-reset" type="button">Reset overrides</button>
+            <button class="button button-danger" id="workspace-settings-delete" type="button">Delete workspace</button>
           </div>
         </form>
+
+        <div class="drawer-subsection hidden" id="workspace-create-section">
+          <div class="drawer-section-header">
+            <h4>Create workspace</h4>
+            <span class="panel-hint" id="workspace-create-count">0 / 6 workspaces used</span>
+          </div>
+          <form class="drawer-form" id="workspace-create-form">
+            <label>
+              Name
+              <input id="workspace-create-name" type="text" placeholder="Focus" />
+            </label>
+            <label>
+              Title
+              <input id="workspace-create-title" type="text" placeholder="Plan the week in one place" />
+            </label>
+            <label>
+              Description
+              <textarea id="workspace-create-description" rows="3" placeholder="Track everything for this part of life."></textarea>
+            </label>
+            <label>
+              Board type
+              <select id="workspace-create-board-type">
+                <option value="kanban">Task board (Kanban)</option>
+                <option value="tasks">Tasks board</option>
+                <option value="chores">Chores board</option>
+                <option value="menu">Menu board</option>
+                <option value="home">Home board</option>
+              </select>
+            </label>
+            <label>
+              Accent
+              <input id="workspace-create-accent" type="color" />
+            </label>
+            <label>
+              Accent 2
+              <input id="workspace-create-accent2" type="color" />
+            </label>
+            <div class="drawer-section-header">
+              <h5>Start with these widgets</h5>
+              <span class="panel-hint">Choose what shows up first</span>
+            </div>
+            <div class="drawer-form" id="workspace-create-widget-list"></div>
+            <div class="drawer-actions">
+              <button class="button button-primary" id="workspace-create-submit" type="submit">Create workspace</button>
+            </div>
+          </form>
+        </div>
 
         <div class="drawer-subsection">
           <div class="drawer-section-header">
