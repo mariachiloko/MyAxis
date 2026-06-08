@@ -402,6 +402,12 @@ function wireCalendarControls() {
   calendarPrevEl.addEventListener("click", () => shiftCalendar(-1));
   calendarNextEl.addEventListener("click", () => shiftCalendar(1));
   calendarLinkEl?.addEventListener("click", () => {
+    if (isManagedGoogleCalendarConfigured()) {
+      handleCalendarWidgetSettingsSync(appState.workspaceId).catch((error) => {
+        console.warn("Unable to link calendar.", error);
+      });
+      return;
+    }
     toggleCalendarWidgetSettings(appState.workspaceId);
   });
   schedulePrevEl.addEventListener("click", () => shiftScheduleDay(-1));
