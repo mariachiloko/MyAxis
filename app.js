@@ -5070,7 +5070,9 @@ function renderSpotify(workspace) {
         <div class="spotify-topline">
           <strong>Spotify</strong>
           <div class="spotify-topline-actions">
-            ${managedSpotify ? "" : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Setup</button>`}
+            ${managedSpotify
+              ? `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="login" aria-label="Login to Spotify">Login to Spotify</button>`
+              : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Setup</button>`}
           </div>
         </div>
         <p class="spotify-status">${managedSpotify ? "Login to Spotify to use the browser player." : "Add your Spotify app client ID and redirect URI in the Widgets drawer to enable the player."}</p>
@@ -5087,7 +5089,9 @@ function renderSpotify(workspace) {
         <div class="spotify-topline">
           <strong>Spotify</strong>
           <div class="spotify-topline-actions">
-            ${managedSpotify ? `<span class="tag-chip tag-chip--spotify">Login</span>` : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Login</button>`}
+            ${managedSpotify
+              ? `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="login" aria-label="Login to Spotify">Login to Spotify</button>`
+              : `<button class="tag-chip tag-chip--spotify tag-chip--button" type="button" data-spotify-action="open-settings" aria-label="Open Spotify settings">Login</button>`}
           </div>
         </div>
         <p class="spotify-status">Sign in to Spotify to turn this into a browser player.</p>
