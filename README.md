@@ -1,103 +1,91 @@
 # MyAxis
 
-A private-safe, Skylight-inspired dashboard for work, projects, study, and home planning.
+MyAxis is a serverless personal dashboard built for AWS. It combines work, school, home, projects, and planning into one app with workspace-specific layouts and account-backed sync.
 
-## What this is
+## What Recruiters Should See
 
-- Workspace switching for different contexts
-- Kanban, calendar, todo, goals, and study widgets
-- Widget-specific edit windows instead of one giant settings panel
-- Fixed motivation note that changes on each load
-- A local-only scratchpad for notes
-- Public-safe sample data with private overrides kept out of Git
-- Drag-and-drop kanban cards
-- Drag-and-drop widget layout with resizable panels
+This project shows:
+
+- Static frontend hosting on S3 + CloudFront
+- Infrastructure as code with Terraform
+- User authentication with Cognito
+- Backend APIs with API Gateway + Lambda
+- Persistent workspace state in DynamoDB
+- Per-workspace calendar linking and sync
+- GitHub Actions deployment through AWS OIDC
+- Local-first browser state plus optional cloud sync
+
+## Core Features
+
+- Workspace switching for different parts of life
+- Workspace creation with a limit of 6 total workspaces
+- Custom board types for each workspace, including task board, chores, menu, and home layouts
+- Task board, calendar, schedule, study, work stories, weather, Spotify, and capture widgets
+- Per-widget settings instead of one giant settings panel
+- Drag-and-drop widget layout and drag-and-drop kanban cards
 - Local backup export and import
-- A reusable config schema for custom workspaces
-- A private settings drawer for workspace styling and cloud sync
-- Task, calendar, and flashcard editors that persist locally
-- Week and month calendar views with per-day add buttons and collapsible month cards
-- Study flashcards geared toward project and interview prep
-- Optional Home workspace Google Calendar sync using a Google OAuth client ID and calendar ID you provide locally
-- Home calendar sync can use more than one calendar ID, separated by commas or new lines
-- Optional Spotify mini-player using Spotify PKCE login and the Web Playback SDK, which requires a Spotify Premium account
-- Optional motivational-quote endpoint for AI-generated quote text, configured locally in `config.local.js`
-- Optional cloud sync settings for the backend API URL, plus Cognito sign-in settings stored locally in the browser or `config.local.js`
+- Private scratchpad notes stored in the browser
+- Week and month calendar views
+- Day-based schedule timeline that merges calendar events and manual items
+- Home workspace menu and grocery list
+- Optional calendar linking per workspace
+- Optional Spotify browser player per workspace
 
-## Privacy rules
+## Cloud Architecture
 
-- Do not commit personal calendars, credentials, API keys, or private notes
-- Keep local overrides in `config.local.js`
-- Keep personal content in ignored paths only
+The AWS deployment path is designed to stay simple and reusable:
 
-## Local use
+- S3 stores the static site
+- CloudFront serves the app
+- Cognito handles sign-in
+- API Gateway exposes the backend
+- Lambda handles workspace and integration logic
+- DynamoDB stores user and workspace state
+- EventBridge can drive scheduled sync jobs later
+- GitHub Actions deploys the frontend through an AWS role instead of stored AWS keys
 
-Open the static site with a local web server, then edit `config.example.js` and optionally add a `config.local.js` file for your private setup.
-
-## Repo layout
+## Repository Layout
 
 - `app.js`, `index.html`, and `styles.css` are the public dashboard shell
-- `infra/` contains the AWS/Terraform scaffold for the serverless deployment path
-- `docs/runbooks/` contains short public runbooks for local use, backend sync, calendar sync, calendar linking, and deploy
-- `scripts/build.sh` creates a simple static build output in `dist/`
-- `runtime-config.js` is the public-safe runtime config hook that gets populated during build
-- `scripts/package-api.sh` installs the Lambda dependencies before a Terraform apply
+- `infra/` contains the Terraform scaffold
+- `scripts/` contains build and packaging helpers
+- `docs/runbooks/` contains short public runbooks for setup, deployment, and sync
 - `.github/workflows/` contains CI and deployment workflows
+
+## Local Development
+
+Open the app with a local web server, then use `config.example.js` as the public sample config and `config.local.js` for private local overrides.
 
 ## Customization
 
-- `config.example.js` is the public-safe starter config
-- `config.local.js` is the private override file and is ignored by Git
-- `config.schema.json` documents the expected shape of each workspace
-- Imported JSON backups store local dashboard state in your browser
-- Local UI overrides are stored in browser storage, not GitHub
-- Kanban columns are meant to read like `To-do`, `In progress`, and `Done`
-- If you set `aiEndpoint`, the dashboard will POST workspace context to that endpoint and use the returned `quote` field for motivation text or `text`/`message` for assistant replies when available
-- Motivation quotes are cached per day in the browser so the AI does not get called on every app open
-- If you set `apiBaseUrl`, the dashboard can sync workspace settings and Home calendar connections to the AWS backend
-- If you set the Cognito fields, the dashboard can sign in against your AWS user pool and use that session for backend requests
-- Home calendar sync settings live locally and are not part of the public repo
+- `config.example.js` defines the public starter workspaces
+- `config.local.js` is ignored by Git and stays private on your machine
+- `config.schema.json` documents the expected workspace shape
+- Widget visibility, layout choices, and local state are saved in the browser
 
-## Privacy rules for backups
+## Workspace Sync
 
-- Backups may contain private scratchpad text and workspace state
-- Keep backup files local
-- Do not commit imported backups or private config files
+Each workspace can keep its own state. In the AWS version, the account-backed backend stores:
 
-## Current state
+- workspace settings
+- workspace state
+- calendar links
+- sync metadata
 
-The current version is focused on a clean, modular dashboard shell with local-first state management, plus optional Home workspace Google Calendar sync. The repo now includes the first Terraform/AWS scaffold, backend API, and Cognito sign-in path so the project can evolve into a serverless deployment in phases.
+That means a user can sign in on another device and get the same workspace setup back.
 
-## Deployment phase
+## Deployment
 
-- Start with [docs/runbooks/deploy.md](docs/runbooks/deploy.md) for the simple deploy checklist.
-- Terraform provisions the static site, auth, data tables, API, and deploy role
-- GitHub Actions builds the app, syncs `dist/` to S3, and invalidates CloudFront
-- GitHub Actions assumes an AWS role through OIDC instead of storing AWS keys in the repo
-- Set these GitHub repository variables before enabling the deploy workflow:
-  - `AWS_REGION`
-  - `AWS_ROLE_ARN`
-  - `SITE_BUCKET`
-  - `CLOUDFRONT_DISTRIBUTION_ID`
-  - `MYAXIS_API_BASE_URL`
-  - `MYAXIS_COGNITO_REGION`
-  - `MYAXIS_COGNITO_USER_POOL_ID`
-  - `MYAXIS_COGNITO_CLIENT_ID`
-  - `MYAXIS_COGNITO_HOSTED_UI_DOMAIN`
-  - `MYAXIS_COGNITO_REDIRECT_URI`
-  - `MYAXIS_COGNITO_LOGOUT_URI`
-- Terraform outputs the bucket name, CloudFront domain, API endpoint, Cognito IDs, and deploy role ARN
-- Run `./scripts/package-api.sh` before `terraform apply` so the Lambda zip includes its Node dependencies
-- Run `./scripts/build.sh` with those `MYAXIS_*` variables set to generate `dist/runtime-config.js` for the deployed site
+Start with [docs/runbooks/deploy.md](docs/runbooks/deploy.md) for the step-by-step deploy checklist.
 
-## Backend API
+The deployment path uses Terraform, GitHub Actions, and AWS-managed infrastructure. The frontend build generates a runtime config file from environment variables, then GitHub Actions syncs the built site to S3 and invalidates CloudFront.
 
-- `GET /health` for a public health check
-- `GET /v1/me` for the signed-in user plus stored workspace state
-- `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/settings`
-- `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/calendar-connection`
-- `GET`, `PUT`, and `DELETE /v1/workspaces/{workspaceId}/state`
-- Workspace state changes now auto-sync to the backend when cloud sync is configured
-- The API expects a Cognito JWT on authenticated routes
-- The Settings drawer includes private `Cloud sync` and `Cognito sign-in` sections for backend access
-- The Cognito section expects your region, user pool ID, client ID, hosted UI domain, and redirect/logout URIs
+## Current State
+
+The current version is the public dashboard shell plus the AWS scaffold for deployment. The project is being built in phases so the public repo stays readable and the deployment path stays predictable.
+
+## Notes
+
+- Keep personal config and browser backups out of Git
+- Keep workspace data tied to the signed-in account in AWS
+- Use the runbooks when setting up local development or deployment
