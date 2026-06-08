@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <title>MyAxis</title>
-    <script src="./runtime-config.js?v=20260603-4"></script>
-    <link rel="stylesheet" href="./styles.css?v=20260603-2" />
+    <script src="./runtime-config.js?v=20260608-1"></script>
+    <link rel="stylesheet" href="./styles.css?v=20260608-1" />
   </head>
   <body>
     <div class="shell">
@@ -584,6 +584,20 @@
       </div>
     </aside>
 
-    <script type="module" src="./app.js?v=20260605-11"></script>
+    <section class="auth-gate hidden" id="auth-gate" aria-label="Sign in to MyAxis">
+      <div class="auth-gate-card">
+        <p class="eyebrow">MyAxis cloud access</p>
+        <h2>Sign in to continue</h2>
+        <p class="lede">
+          Your saved workspaces, calendar links, and cloud-backed state load after you sign in.
+        </p>
+        <p class="panel-hint" id="auth-gate-status">Checking sign-in...</p>
+        <div class="auth-gate-actions">
+          <button class="button button-primary" id="auth-gate-login" type="button">Sign in with Cognito</button>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="./app.js?v=20260608-1"></script>
   </body>
 </html>

@@ -99,6 +99,46 @@ body {
   margin: 0 auto;
 }
 
+body.auth-gated {
+  overflow: hidden;
+}
+
+body.auth-gated .shell {
+  display: none;
+}
+
+.auth-gate {
+  min-height: calc(100vh - 56px);
+  display: grid;
+  place-items: center;
+}
+
+.auth-gate-card {
+  width: min(640px, 100%);
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: linear-gradient(180deg, var(--panel-strong), var(--surface));
+  box-shadow: var(--shadow);
+}
+
+.auth-gate-card h2 {
+  margin-top: 10px;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+}
+
+.auth-gate-card .lede {
+  max-width: 54ch;
+}
+
+.auth-gate-actions {
+  margin-top: 24px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .motivation-light {
   position: relative;
   display: grid;

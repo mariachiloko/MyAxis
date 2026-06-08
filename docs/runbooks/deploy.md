@@ -35,6 +35,7 @@ You can deploy when these are true:
 2. The frontend builds into `dist/`.
 3. GitHub Actions uploads the build to S3.
 4. CloudFront serves the site.
+5. The first screen is Cognito sign-in, then the dashboard loads the saved account state.
 
 ## Main pieces
 

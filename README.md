@@ -96,7 +96,7 @@ That means a user can sign in on another device and get the same workspace setup
 
 Start with [docs/runbooks/deploy.md](docs/runbooks/deploy.md) for the step-by-step deploy checklist.
 
-The deployment path uses Terraform, GitHub Actions, and AWS-managed infrastructure. The frontend build generates a runtime config file from environment variables, then GitHub Actions syncs the built site to S3 and invalidates CloudFront.
+The deployment path uses Terraform, GitHub Actions, and AWS-managed infrastructure. The frontend build generates a runtime config file from environment variables, then GitHub Actions syncs the built site to S3 and invalidates CloudFront. In the deployed version, users land on a Cognito sign-in screen before the dashboard loads.
 
 ## Current State
 

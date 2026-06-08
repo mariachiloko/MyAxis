@@ -209,6 +209,9 @@ const cognitoSaveEl = document.getElementById("cognito-save");
 const cognitoLoginEl = document.getElementById("cognito-login");
 const cognitoLogoutEl = document.getElementById("cognito-logout");
 const cognitoStatusEl = document.getElementById("cognito-status");
+const authGateEl = document.getElementById("auth-gate");
+const authGateLoginEl = document.getElementById("auth-gate-login");
+const authGateStatusEl = document.getElementById("auth-gate-status");
 const homeCalendarSectionEl = document.getElementById("home-calendar-section");
 const drawerWidgetSectionEl = document.getElementById("drawer-widget-section");
 const drawerWeatherSectionEl = document.getElementById("drawer-weather-section");
@@ -301,10 +304,20 @@ let spotifyPlaybackTickerSnapshot = "";
 
 bootstrap();
 
-function bootstrap() {
+async function bootstrap() {
   applyThemeMode(appState.theme);
   renderDate();
   renderMotivation();
+  await handleCognitoRedirect().catch((error) => {
+    console.warn("Unable to complete Cognito login.", error);
+  });
+  if (shouldShowCognitoGate()) {
+    showCognitoGate();
+    wireAuthGateControls();
+    updateAuthGateStatus();
+    return;
+  }
+  hideCognitoGate();
   renderTabs();
   populateEditorSelects();
   applyWidgetLayout();
@@ -317,9 +330,6 @@ function bootstrap() {
   wireBackendSyncControls();
   renderWorkspace(getWorkspace(appState.workspaceId));
   refreshMotivationQuote(getWorkspace(appState.workspaceId));
-  handleCognitoRedirect().catch((error) => {
-    console.warn("Unable to complete Cognito login.", error);
-  });
   handleSpotifyRedirect().catch((error) => {
     console.warn("Unable to complete Spotify login.", error);
   });
@@ -609,6 +619,10 @@ function wireCognitoAuthControls() {
   cognitoLoginEl?.addEventListener("click", handleCognitoLoginClick);
   cognitoLogoutEl?.addEventListener("click", handleCognitoLogoutClick);
   fillCognitoSettingsForm();
+}
+
+function wireAuthGateControls() {
+  authGateLoginEl?.addEventListener("click", handleCognitoLoginClick);
 }
 
 function renderTabs() {
@@ -3680,6 +3694,52 @@ function normalizeSpotifyRedirectUri(value) {
   } catch {
     return raw.includes("localhost") ? raw.replace("localhost", "127.0.0.1") : raw;
   }
+}
+
+function isLocalPreviewHost() {
+  const hostname = String(window.location.hostname || "").toLowerCase();
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function shouldShowCognitoGate() {
+  if (isLocalPreviewHost()) {
+    return false;
+  }
+
+  const settings = getCognitoSettings();
+  return Boolean(settings.clientId && settings.hostedUiDomain && settings.userPoolId);
+}
+
+function showCognitoGate() {
+  document.body.classList.add("auth-gated");
+  authGateEl?.classList.remove("hidden");
+}
+
+function hideCognitoGate() {
+  document.body.classList.remove("auth-gated");
+  authGateEl?.classList.add("hidden");
+}
+
+function updateAuthGateStatus() {
+  if (!authGateStatusEl) {
+    return;
+  }
+
+  if (getStoredCognitoSession()) {
+    authGateStatusEl.textContent = "Signed in. Loading your dashboard.";
+    authGateLoginEl?.setAttribute("disabled", "disabled");
+    return;
+  }
+
+  const settings = getCognitoSettings();
+  if (!settings.clientId || !settings.hostedUiDomain || !settings.userPoolId) {
+    authGateStatusEl.textContent = "Cognito is not configured yet for this deployment.";
+    authGateLoginEl?.setAttribute("disabled", "disabled");
+    return;
+  }
+
+  authGateStatusEl.textContent = "Use your MyAxis account to unlock your workspaces.";
+  authGateLoginEl?.removeAttribute("disabled");
 }
 
 function updateSpotifyStatus(message = "") {
