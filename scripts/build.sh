@@ -19,12 +19,16 @@ import os
 from pathlib import Path
 
 dist_dir = Path(os.environ["DIST_DIR"])
+region = os.environ.get("MYAXIS_COGNITO_REGION", "").strip()
+hosted_ui_domain = os.environ.get("MYAXIS_COGNITO_HOSTED_UI_DOMAIN", "").strip()
+if hosted_ui_domain and not hosted_ui_domain.startswith("http") and ".auth." not in hosted_ui_domain and ".amazoncognito.com" not in hosted_ui_domain and region:
+    hosted_ui_domain = f"{hosted_ui_domain}.auth.{region}.amazoncognito.com"
 runtime_config = {
     "apiBaseUrl": os.environ.get("MYAXIS_API_BASE_URL", "").strip(),
-    "cognitoRegion": os.environ.get("MYAXIS_COGNITO_REGION", "").strip(),
+    "cognitoRegion": region,
     "cognitoUserPoolId": os.environ.get("MYAXIS_COGNITO_USER_POOL_ID", "").strip(),
     "cognitoClientId": os.environ.get("MYAXIS_COGNITO_CLIENT_ID", "").strip(),
-    "cognitoHostedUiDomain": os.environ.get("MYAXIS_COGNITO_HOSTED_UI_DOMAIN", "").strip(),
+    "cognitoHostedUiDomain": hosted_ui_domain,
     "cognitoRedirectUri": os.environ.get("MYAXIS_COGNITO_REDIRECT_URI", "").strip(),
     "cognitoLogoutUri": os.environ.get("MYAXIS_COGNITO_LOGOUT_URI", "").strip()
 }

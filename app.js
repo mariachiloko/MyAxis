@@ -3696,6 +3696,24 @@ function normalizeSpotifyRedirectUri(value) {
   }
 }
 
+function normalizeCognitoHostedUiDomain(value, region = "") {
+  const raw = String(value || "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  if (!raw) {
+    return "";
+  }
+  if (raw.includes(".auth.") && raw.includes(".amazoncognito.com")) {
+    return raw;
+  }
+  if (raw.includes(".amazoncognito.com")) {
+    return raw;
+  }
+  if (raw.includes(".")) {
+    return raw;
+  }
+  const nextRegion = String(region || "").trim() || "us-east-1";
+  return `${raw}.auth.${nextRegion}.amazoncognito.com`;
+}
+
 function isLocalPreviewHost() {
   const hostname = String(window.location.hostname || "").toLowerCase();
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
@@ -5297,7 +5315,10 @@ function getCognitoSettings() {
     region: String(stored.region || config.cognitoRegion || "us-east-1").trim(),
     userPoolId: String(stored.userPoolId || config.cognitoUserPoolId || "").trim(),
     clientId: String(stored.clientId || config.cognitoClientId || "").trim(),
-    hostedUiDomain: String(stored.hostedUiDomain || config.cognitoHostedUiDomain || "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+    hostedUiDomain: normalizeCognitoHostedUiDomain(
+      String(stored.hostedUiDomain || config.cognitoHostedUiDomain || "").trim(),
+      String(stored.region || config.cognitoRegion || "us-east-1").trim()
+    ),
     redirectUri,
     logoutUri
   };
@@ -5389,23 +5410,27 @@ function handleCognitoSettingsSubmit(event) {
 }
 
 async function handleCognitoLoginClick() {
-  const settings = getCognitoSettings();
-  if (!settings.clientId || !settings.hostedUiDomain || !settings.userPoolId) {
-    window.alert("Fill out the Cognito settings before signing in.");
-    return;
-  }
+  try {
+    const settings = getCognitoSettings();
+    if (!settings.clientId || !settings.hostedUiDomain || !settings.userPoolId) {
+      window.alert("Fill out the Cognito settings before signing in.");
+      return;
+    }
 
-  const transaction = await createCognitoTransaction();
-  localStorage.setItem(STORAGE_KEYS.cognitoTransaction, JSON.stringify(transaction));
-  const authorizeUrl = new URL(`https://${settings.hostedUiDomain}/oauth2/authorize`);
-  authorizeUrl.searchParams.set("client_id", settings.clientId);
-  authorizeUrl.searchParams.set("response_type", "code");
-  authorizeUrl.searchParams.set("scope", "openid email profile");
-  authorizeUrl.searchParams.set("redirect_uri", settings.redirectUri);
-  authorizeUrl.searchParams.set("state", transaction.state);
-  authorizeUrl.searchParams.set("code_challenge", transaction.codeChallenge);
-  authorizeUrl.searchParams.set("code_challenge_method", "S256");
-  window.location.assign(authorizeUrl.toString());
+    const transaction = await createCognitoTransaction();
+    localStorage.setItem(STORAGE_KEYS.cognitoTransaction, JSON.stringify(transaction));
+    const authorizeUrl = buildCognitoAuthorizeUrl(settings, transaction);
+    if (authGateStatusEl) {
+      authGateStatusEl.textContent = "Opening Cognito sign-in...";
+    }
+    window.location.href = authorizeUrl.toString();
+  } catch (error) {
+    console.warn("Unable to start Cognito sign-in.", error);
+    if (authGateStatusEl) {
+      authGateStatusEl.textContent = "Unable to open Cognito sign-in. Check the browser console for details.";
+    }
+    window.alert(`Unable to open Cognito sign-in: ${error?.message || error}`);
+  }
 }
 
 async function handleCognitoLogoutClick() {
@@ -5420,6 +5445,18 @@ async function handleCognitoLogoutClick() {
   } else {
     fillCognitoSettingsForm();
   }
+}
+
+function buildCognitoAuthorizeUrl(settings, transaction) {
+  const authorizeUrl = new URL(`https://${settings.hostedUiDomain}/oauth2/authorize`);
+  authorizeUrl.searchParams.set("client_id", settings.clientId);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("scope", "openid email profile");
+  authorizeUrl.searchParams.set("redirect_uri", settings.redirectUri);
+  authorizeUrl.searchParams.set("state", transaction.state);
+  authorizeUrl.searchParams.set("code_challenge", transaction.codeChallenge);
+  authorizeUrl.searchParams.set("code_challenge_method", "S256");
+  return authorizeUrl;
 }
 
 async function handleCognitoRedirect() {
