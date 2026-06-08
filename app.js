@@ -3745,19 +3745,40 @@ function updateAuthGateStatus() {
 
   if (getStoredCognitoSession()) {
     authGateStatusEl.textContent = "Signed in. Loading your dashboard.";
-    authGateLoginEl?.setAttribute("disabled", "disabled");
+    authGateLoginEl?.setAttribute("aria-disabled", "true");
+    authGateLoginEl?.setAttribute("tabindex", "-1");
     return;
   }
 
   const settings = getCognitoSettings();
   if (!settings.clientId || !settings.hostedUiDomain || !settings.userPoolId) {
     authGateStatusEl.textContent = "Cognito is not configured yet for this deployment.";
-    authGateLoginEl?.setAttribute("disabled", "disabled");
+    authGateLoginEl?.setAttribute("aria-disabled", "true");
+    authGateLoginEl?.setAttribute("tabindex", "-1");
+    authGateLoginEl?.setAttribute("href", "#");
     return;
   }
 
   authGateStatusEl.textContent = "Use your MyAxis account to unlock your workspaces.";
-  authGateLoginEl?.removeAttribute("disabled");
+  authGateLoginEl?.removeAttribute("aria-disabled");
+  authGateLoginEl?.removeAttribute("tabindex");
+  prepareCognitoGateLoginUrl().catch((error) => {
+    console.warn("Unable to prepare Cognito sign-in.", error);
+    if (authGateStatusEl) {
+      authGateStatusEl.textContent = "Unable to prepare Cognito sign-in yet.";
+    }
+  });
+}
+
+async function prepareCognitoGateLoginUrl() {
+  const settings = getCognitoSettings();
+  if (!settings.clientId || !settings.hostedUiDomain || !settings.userPoolId || !authGateLoginEl) {
+    return;
+  }
+
+  const transaction = await createCognitoTransaction();
+  localStorage.setItem(STORAGE_KEYS.cognitoTransaction, JSON.stringify(transaction));
+  authGateLoginEl.href = buildCognitoAuthorizeUrl(settings, transaction).toString();
 }
 
 function updateSpotifyStatus(message = "") {
