@@ -982,6 +982,13 @@ function getAIEndpoint() {
   return configured || "";
 }
 
+function getAssistantToolbarHint() {
+  if (getBackendSyncConfig().baseUrl) {
+    return "Bedrock assistant connected to the current workspace.";
+  }
+  return "Local mock assistant for now. It uses the current workspace context.";
+}
+
 function getAIModel() {
   return String(config.aiModel || "").trim() || "amazon.nova-micro-v1:0";
 }
@@ -1394,12 +1401,21 @@ async function sendAssistantMessage(workspaceId, prompt) {
   saveCaptureAssistant(workspaceId, assistantState);
   renderWorkspace(getWorkspace(appState.workspaceId));
 
-  const reply = await resolveAIText({
-    mode: "assistant",
-    workspace,
-    prompt: input,
-    messages: assistantState.messages
-  });
+  let reply = "";
+  try {
+    reply = await resolveAIText({
+      mode: "assistant",
+      workspace,
+      prompt: input,
+      messages: assistantState.messages
+    });
+  } catch (error) {
+    console.warn("Assistant request failed.", error);
+    const backendSync = getBackendSyncConfig();
+    reply = backendSync.baseUrl
+      ? "MyAxis AI is temporarily unavailable. Please try again in a moment."
+      : generateLocalAssistantReply(workspace, input);
+  }
 
   const nextState = getStoredCaptureAssistant(workspaceId);
   nextState.messages.push({
@@ -2672,7 +2688,7 @@ function renderCapture(workspace) {
       <div class="capture-mode ${captureMode === "assistant" ? "is-active" : ""}" data-capture-pane="assistant">
         <div class="capture-assistant">
           <div class="capture-assistant-toolbar">
-            <span class="panel-hint">Local mock assistant for now. It uses the current workspace context.</span>
+            <span class="panel-hint">${escapeHtml(getAssistantToolbarHint())}</span>
             <div class="capture-assistant-actions">
               <button class="button button-compact" type="button" data-capture-action="assistant-summarize">Summarize day</button>
               <button class="button button-compact" type="button" data-capture-action="assistant-next">What next?</button>
