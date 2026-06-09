@@ -934,7 +934,7 @@ async function refreshMotivationQuote(workspace) {
   renderMotivation();
 }
 
-async function resolveAIText({ mode, workspace, prompt = "", messages = [] }) {
+async function resolveAIText({ mode, workspace, prompt = "", messages = [], allowLocalFallback = true }) {
   const endpoint = getAIEndpoint();
   if (endpoint) {
     try {
@@ -958,18 +958,32 @@ async function resolveAIText({ mode, workspace, prompt = "", messages = [] }) {
 
   const backendSync = getBackendSyncConfig();
   if (backendSync.baseUrl) {
-    try {
-      const payload = await backendRequest("/v1/ai", {
-        method: "POST",
-        body: buildAIRequest({ mode, workspace, prompt, messages })
-      });
-      const text = extractAIText(payload, mode);
-      if (text) {
-        return text;
+    const authorizationToken = await resolveBackendAuthorizationToken().catch(() => "");
+    if (!authorizationToken) {
+      if (!allowLocalFallback && mode === "assistant") {
+        throw new Error("Sign in with Cognito to use the cloud assistant.");
       }
-    } catch (error) {
-      console.warn("Cloud AI endpoint failed, using fallback.", error);
+    } else {
+      try {
+        const payload = await backendRequest("/v1/ai", {
+          method: "POST",
+          body: buildAIRequest({ mode, workspace, prompt, messages })
+        });
+        const text = extractAIText(payload, mode);
+        if (text) {
+          return text;
+        }
+      } catch (error) {
+        console.warn("Cloud AI endpoint failed, using fallback.", error);
+        if (!allowLocalFallback && mode === "assistant") {
+          throw error;
+        }
+      }
     }
+  }
+
+  if (!allowLocalFallback && mode === "assistant") {
+    throw new Error("MyAxis AI is temporarily unavailable. Please try again in a moment.");
   }
 
   return mode === "motivation"
@@ -983,8 +997,12 @@ function getAIEndpoint() {
 }
 
 function getAssistantToolbarHint() {
-  if (getBackendSyncConfig().baseUrl) {
-    return "Bedrock assistant connected to the current workspace.";
+  const backendSync = getBackendSyncConfig();
+  if (backendSync.baseUrl) {
+    if (getStoredCognitoSession() || backendSync.accessToken) {
+      return "Bedrock assistant connected to the current workspace.";
+    }
+    return "Sign in with Cognito to use the cloud assistant.";
   }
   return "Local mock assistant for now. It uses the current workspace context.";
 }
@@ -1405,18 +1423,19 @@ async function sendAssistantMessage(workspaceId, prompt) {
   renderWorkspace(getWorkspace(appState.workspaceId));
 
   let reply = "";
+  const backendSync = getBackendSyncConfig();
   try {
     reply = await resolveAIText({
       mode: "assistant",
       workspace,
       prompt: input,
-      messages: [{ role: "user", content: input }]
+      messages: [{ role: "user", content: input }],
+      allowLocalFallback: !backendSync.baseUrl
     });
   } catch (error) {
     console.warn("Assistant request failed.", error);
-    const backendSync = getBackendSyncConfig();
     reply = backendSync.baseUrl
-      ? "MyAxis AI is temporarily unavailable. Please try again in a moment."
+      ? "MyAxis AI is temporarily unavailable. Sign in with Cognito or try again in a moment."
       : generateLocalAssistantReply(workspace, input);
   }
 
