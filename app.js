@@ -6258,7 +6258,7 @@ async function backendRequest(path, options = {}) {
   const requestOptions = async () => ({
     method: options.method || "GET",
     headers: {
-      Authorization: `Bearer ${authorizationToken}`,
+      ...(authorizationToken ? { Authorization: `Bearer ${authorizationToken}` } : {}),
       ...(options.body ? { "content-type": "application/json" } : {}),
       ...(options.headers || {})
     },
