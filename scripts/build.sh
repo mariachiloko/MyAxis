@@ -25,6 +25,7 @@ if hosted_ui_domain and not hosted_ui_domain.startswith("http") and ".auth." not
     hosted_ui_domain = f"{hosted_ui_domain}.auth.{region}.amazoncognito.com"
 runtime_config = {
     "apiBaseUrl": os.environ.get("MYAXIS_API_BASE_URL", "").strip(),
+    "aiModel": os.environ.get("MYAXIS_AI_MODEL", "").strip(),
     "cognitoRegion": region,
     "cognitoUserPoolId": os.environ.get("MYAXIS_COGNITO_USER_POOL_ID", "").strip(),
     "cognitoClientId": os.environ.get("MYAXIS_COGNITO_CLIENT_ID", "").strip(),

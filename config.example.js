@@ -1,6 +1,7 @@
 export default {
   defaultWorkspace: "work",
   aiEndpoint: "",
+  aiModel: "amazon.nova-micro-v1:0",
   apiBaseUrl: "",
   apiAccessToken: "",
   cognitoRegion: "",

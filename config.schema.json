@@ -14,6 +14,10 @@
       "type": "string",
       "description": "Optional endpoint for motivation quotes and the workspace assistant."
     },
+    "aiModel": {
+      "type": "string",
+      "description": "Optional AI model name passed to the backend endpoint. Defaults to a low-cost Bedrock model."
+    },
     "apiBaseUrl": {
       "type": "string",
       "description": "Optional AWS backend base URL for cloud sync."

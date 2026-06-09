@@ -45,6 +45,7 @@ You can deploy when these are true:
 - DynamoDB for user and workspace data
 - Lambda and API Gateway for backend requests
 - Bedrock for AI replies and motivation quotes if you want the AWS-native AI path
+- A cheap default model is recommended for daily personal use
 
 ## Provider setup
 
@@ -57,6 +58,12 @@ The deployed build can receive provider app IDs from runtime config so normal us
 
 When these are set, the dashboard shows user-facing actions like `Login to Spotify` and `Link calendar` instead of setup fields.
 
+AI can also be configured through runtime config:
+
+- `MYAXIS_AI_MODEL`
+
+The public default should stay cheap, with daily motivation quotes cached locally so opening the app does not call the model every time. If someone wants a stronger model in their own AWS account, they can override the model setting when they deploy their own copy.
+
 ## What to check after deploy
 
 - The site opens from CloudFront.
@@ -65,6 +72,7 @@ When these are set, the dashboard shows user-facing actions like `Login to Spoti
 - Home calendar sync works.
 - The backend sync status looks healthy.
 - Motivation quotes should be cached for the day so opening the app does not call the model every time.
+- If you enable AI, keep the model choice small at first and add an AWS Budget alert.
 
 ## What to keep private
 

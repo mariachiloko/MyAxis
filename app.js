@@ -966,10 +966,15 @@ function getAIEndpoint() {
   return configured || "";
 }
 
+function getAIModel() {
+  return String(config.aiModel || "").trim() || "amazon.nova-micro-v1:0";
+}
+
 function buildAIRequest({ mode, workspace, prompt, messages }) {
   const summary = getWorkspaceAssistantSummary(workspace);
   return {
     mode,
+    model: getAIModel(),
     workspace: {
       id: workspace.id,
       label: workspace.label,
@@ -1273,8 +1278,13 @@ function buildWeatherHourlyForecast(hourly, currentTime, count = 4) {
     return [];
   }
 
-  const currentIndex = Math.max(0, times.findIndex((value) => String(value) === String(currentTime)));
-  const startIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+  const parsedCurrentTime = Date.parse(String(currentTime || ""));
+  const currentTimestamp = Number.isNaN(parsedCurrentTime) ? Date.now() : parsedCurrentTime;
+  const nextHourIndex = times.findIndex((value) => {
+    const parsedTime = Date.parse(String(value || ""));
+    return Number.isFinite(parsedTime) && parsedTime > currentTimestamp;
+  });
+  const startIndex = nextHourIndex >= 0 ? nextHourIndex : 0;
   return times
     .slice(startIndex, startIndex + count)
     .map((time, index) => ({
@@ -9126,6 +9136,7 @@ function mergeDashboardConfig(base, ...overrides) {
   const topLevelKeys = [
     "defaultWorkspace",
     "aiEndpoint",
+    "aiModel",
     "motivationQuoteEndpoint",
     "apiBaseUrl",
     "apiAccessToken",

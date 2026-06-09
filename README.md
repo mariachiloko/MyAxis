@@ -31,6 +31,7 @@ This project shows:
 - Optional calendar linking per workspace
 - Optional Spotify browser player per workspace
 - Cloud-deployed provider IDs can be injected at build time so normal users only see `Login to Spotify` and `Link calendar`
+- AI defaults to a low-cost Bedrock model and motivation quotes are cached for the day so opening the app does not call the model every time
 
 ## Cloud Architecture
 
@@ -44,6 +45,7 @@ The AWS deployment path is designed to stay simple and reusable:
 - DynamoDB stores user and workspace state
 - EventBridge can drive scheduled sync jobs later
 - GitHub Actions deploys the frontend through an AWS role instead of stored AWS keys
+- AI requests can include a model override so a deployer can swap to a stronger model in their own AWS account without changing the public repo
 
 High-level flow:
 
@@ -108,3 +110,4 @@ The current version is the public dashboard shell plus the AWS scaffold for depl
 - Keep personal config and browser backups out of Git
 - Keep workspace data tied to the signed-in account in AWS
 - Use the runbooks when setting up local development or deployment
+- Cloning the repo does not give anyone access to your AWS account; they still need their own AWS environment, variables, and credentials to deploy their own copy
