@@ -123,6 +123,7 @@ const appState = {
   spotifyPlaybackQueueSeedTrackUri: "",
   spotifyAutoAdvanceLock: false,
   spotifyPlaylistAdvanceTimer: null,
+  spotifyExpectedTrackEndAt: 0,
   calendarView: getStoredCalendarView(),
   calendarAnchor: getStoredCalendarAnchor(),
   calendarSelectedDate: getStoredCalendarSelectedDate(),
@@ -4289,6 +4290,9 @@ async function prepareSpotifyPlaybackQueue(workspaceId, seedTrackUri) {
     return [];
   }
 
+  const searchTracks = getSpotifySearchState(workspaceId).results
+    .map(normalizeSpotifyTrack)
+    .filter((track) => track.uri);
   const recommendations = await queueSpotifyRecommendations(workspaceId, seed);
   const queue = dedupeSpotifyQueueTracks([
     normalizeSpotifyTrack({
@@ -4299,6 +4303,7 @@ async function prepareSpotifyPlaybackQueue(workspaceId, seedTrackUri) {
       images: seed.imageUrl ? [{ url: String(seed.imageUrl || "").trim() }] : [],
       duration_ms: Number(seed.duration || 0)
     }),
+    ...searchTracks,
     ...recommendations
   ], "");
   appState.spotifyPlaybackQueue = queue;
@@ -4319,7 +4324,10 @@ async function extendSpotifyPlaybackQueue(workspaceId, seedTrackUri) {
 
   const recommendations = await queueSpotifyRecommendations(workspaceId, seed);
   const existingUris = new Set(appState.spotifyPlaybackQueue.map((track) => String(track?.uri || "").trim()).filter(Boolean));
-  const additions = recommendations.filter((track) => track.uri && !existingUris.has(track.uri));
+  const searchTracks = getSpotifySearchState(workspaceId).results
+    .map(normalizeSpotifyTrack)
+    .filter((track) => track.uri && track.uri !== trackUri);
+  const additions = [...searchTracks, ...recommendations].filter((track) => track.uri && !existingUris.has(track.uri));
   if (additions.length) {
     appState.spotifyPlaybackQueue = dedupeSpotifyQueueTracks([...appState.spotifyPlaybackQueue, ...additions]);
   }
@@ -4370,9 +4378,10 @@ function getSpotifyQueueCurrentTrack() {
 }
 
 function scheduleSpotifyPlaybackAdvance(workspaceId) {
-  clearSpotifyPlaylistAdvanceTimer();
   const state = appState.spotifyPlayerState;
   if (!state || !state.track?.uri) {
+    clearSpotifyPlaylistAdvanceTimer();
+    appState.spotifyExpectedTrackEndAt = 0;
     return;
   }
 
@@ -4383,7 +4392,10 @@ function scheduleSpotifyPlaybackAdvance(workspaceId) {
 
   const isNearEnd = remaining <= 2000;
   if (state.paused) {
-    if (!isNearEnd || appState.spotifyAutoAdvanceLock) {
+    const expectedEndReached = Boolean(appState.spotifyExpectedTrackEndAt && Date.now() >= appState.spotifyExpectedTrackEndAt - 1500);
+    clearSpotifyPlaylistAdvanceTimer();
+    if ((!isNearEnd && !expectedEndReached) || appState.spotifyAutoAdvanceLock) {
+      appState.spotifyExpectedTrackEndAt = 0;
       return;
     }
 
@@ -4404,6 +4416,8 @@ function scheduleSpotifyPlaybackAdvance(workspaceId) {
     return;
   }
 
+  clearSpotifyPlaylistAdvanceTimer();
+  appState.spotifyExpectedTrackEndAt = Date.now() + remaining;
   const delay = Math.max(250, remaining + 120);
   appState.spotifyPlaylistAdvanceTimer = window.setTimeout(() => {
     appState.spotifyAutoAdvanceLock = true;
@@ -4980,14 +4994,19 @@ async function spotifyPlayerApiRequest(workspaceId, path, options = {}) {
 }
 
 function normalizeSpotifyTrack(track) {
+  const artists = Array.isArray(track?.artists)
+    ? track.artists.map((artist) => typeof artist === "string" ? artist.trim() : String(artist?.name || "").trim()).filter(Boolean)
+    : [];
+  const imageUrl = String(track?.imageUrl || track?.album?.images?.[0]?.url || "").trim();
+  const album = String(typeof track?.album === "string" ? track.album : track?.album?.name || "").trim();
   return {
     type: "track",
     uri: String(track?.uri || "").trim(),
     name: String(track?.name || "").trim(),
-    artists: Array.isArray(track?.artists) ? track.artists.map((artist) => String(artist?.name || "").trim()).filter(Boolean) : [],
-    album: String(track?.album?.name || "").trim(),
-    imageUrl: String(track?.album?.images?.[0]?.url || "").trim(),
-    duration: Number(track?.duration_ms || 0)
+    artists,
+    album,
+    imageUrl,
+    duration: Number(track?.duration || track?.duration_ms || 0)
   };
 }
 
@@ -5792,6 +5811,11 @@ function getStoredCognitoSession() {
     return null;
   }
 
+  if (session.expiresAt && Date.now() >= Number(session.expiresAt) && !session.refreshToken) {
+    clearStoredCognitoSession();
+    return null;
+  }
+
   return session;
 }
 
@@ -5848,13 +5872,18 @@ async function maybeRefreshCognitoSession() {
     return session;
   }
 
-  const refreshed = await refreshCognitoSession(settings, session.refreshToken);
-  saveCognitoSession(refreshed);
-  return refreshed;
+  try {
+    const refreshed = await refreshCognitoSession(settings, session.refreshToken);
+    saveCognitoSession(refreshed);
+    return refreshed;
+  } catch (error) {
+    clearStoredCognitoSession();
+    throw error;
+  }
 }
 
 async function resolveBackendAuthorizationToken() {
-  const session = await maybeRefreshCognitoSession().catch(() => getStoredCognitoSession());
+  const session = await maybeRefreshCognitoSession().catch(() => null);
   if (session?.idToken) {
     return session.idToken;
   }
@@ -6070,7 +6099,7 @@ async function hydrateBackendAccountState() {
 
       for (const item of payload.workspaceSettings) {
         const workspaceId = String(item?.workspaceId || "").trim();
-        if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
+        if (!workspaceId) {
           continue;
         }
 
@@ -6125,7 +6154,9 @@ async function hydrateBackendAccountState() {
 
     if (Array.isArray(payload.workspaceStates)) {
       for (const item of payload.workspaceStates) {
-        applyBackendWorkspaceRecord(item);
+        if (applyBackendWorkspaceRecord(item)) {
+          overridesChanged = true;
+        }
       }
     }
   });
@@ -6153,6 +6184,7 @@ async function syncWorkspaceSettingsToBackend(workspaceId) {
     label: workspace.label || "",
     title: workspace.title || "",
     description: workspace.description || "",
+    boardType: getWorkspaceBoardType(workspace),
     accent: workspace.accent || "",
     accent2: workspace.accent2 || "",
     defaultWorkspace: config.defaultWorkspace || ""
@@ -6413,14 +6445,15 @@ function getWorkspaceBackendSnapshot(workspaceId) {
 
 function applyBackendWorkspaceRecord(record) {
   if (!record || typeof record !== "object") {
-    return;
+    return false;
   }
 
   const workspaceId = String(record.workspaceId || "").trim();
-  if (!workspaceId || !config.workspaces.some((workspace) => workspace.id === workspaceId)) {
-    return;
+  if (!workspaceId) {
+    return false;
   }
 
+  let changedWorkspaceOverrides = false;
   if (record.workspace && typeof record.workspace === "object") {
     const workspacePatch = normalizeBackendWorkspaceSettings(record.workspace);
     const patch = {
@@ -6429,6 +6462,7 @@ function applyBackendWorkspaceRecord(record) {
     };
     if (Object.keys(workspacePatch).length) {
       setWorkspaceOverride(workspaceId, patch);
+      changedWorkspaceOverrides = true;
     }
   }
 
@@ -6524,6 +6558,8 @@ function applyBackendWorkspaceRecord(record) {
   if (state.spotifySettings && typeof state.spotifySettings === "object") {
     saveSpotifySettings(workspaceId, state.spotifySettings);
   }
+
+  return changedWorkspaceOverrides;
 }
 
 function syncHomeCalendarSection(workspaceOrId) {
