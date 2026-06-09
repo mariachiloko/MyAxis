@@ -45,7 +45,7 @@ The AWS deployment path is designed to stay simple and reusable:
 - DynamoDB stores user and workspace state
 - EventBridge can drive scheduled sync jobs later
 - GitHub Actions deploys the frontend through an AWS role instead of stored AWS keys
-- AI requests can include a model override so a deployer can swap to a stronger model in their own AWS account without changing the public repo
+- AI requests go through the authenticated `/v1/ai` backend route, default to a low-cost Bedrock model, and can be overridden in a deployer's own AWS account without changing the public repo
 
 High-level flow:
 

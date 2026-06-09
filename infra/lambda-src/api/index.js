@@ -1,4 +1,5 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { BedrockRuntimeClient, ConverseCommand } = require("@aws-sdk/client-bedrock-runtime");
 const {
   DynamoDBDocumentClient,
   DeleteCommand,
@@ -8,6 +9,20 @@ const {
 } = require("@aws-sdk/lib-dynamodb");
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const bedrock = new BedrockRuntimeClient({});
+const DEFAULT_AI_MODEL = process.env.AI_MODEL_DEFAULT || "amazon.nova-micro-v1:0";
+const LOCAL_MOTIVATION_QUOTES = [
+  "Keep the next step small and visible.",
+  "You do not need perfect, you need moving.",
+  "One useful rep today changes the shape of tomorrow.",
+  "Make the next thing obvious, then do that.",
+  "Small progress still counts when it is consistent.",
+  "Clear work builds confidence faster than worry does.",
+  "You are allowed to grow in public, one step at a time.",
+  "Start before the doubt gets a vote.",
+  "Progress is quieter than fear, but it lasts longer.",
+  "You can build this one careful piece at a time."
+];
 
 const TABLES = {
   users: process.env.USERS_TABLE,
@@ -38,6 +53,10 @@ exports.handler = async (event) => {
 
     if (method === "GET" && path === "/v1/me") {
       return jsonResponse(200, await getMePayload(user));
+    }
+
+    if (method === "POST" && path === "/v1/ai") {
+      return await handleAI(user, event);
     }
 
     const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)\/(settings|calendar-connection|state)$/);
@@ -142,6 +161,238 @@ async function getMePayload(user) {
     calendarConnections: connectionItems,
     workspaceStates: stateItems
   };
+}
+
+async function handleAI(user, event) {
+  const body = parseJsonBody(event);
+  const mode = String(body?.mode || "assistant").trim() === "motivation" ? "motivation" : "assistant";
+  const model = String(body?.model || DEFAULT_AI_MODEL || "").trim() || DEFAULT_AI_MODEL;
+  const workspace = normalizeWorkspaceObject(body?.workspace);
+  const summary = buildWorkspaceSummary(workspace, body?.summary);
+  const prompt = String(body?.prompt || "").trim();
+  const messages = normalizeAIMessages(body?.messages, prompt);
+
+  try {
+    const resultText = await invokeBedrockAI({
+      mode,
+      model,
+      workspace,
+      summary,
+      prompt,
+      messages,
+      style: String(body?.style || "").trim()
+    });
+
+    if (mode === "motivation") {
+      return jsonResponse(200, {
+        ok: true,
+        model,
+        quote: resultText
+      });
+    }
+
+    return jsonResponse(200, {
+      ok: true,
+      model,
+      text: resultText
+    });
+  } catch (error) {
+    console.warn("Bedrock AI failed, using local fallback.", error);
+    const fallback = mode === "motivation"
+      ? generateLocalMotivationQuote(workspace)
+      : generateLocalAssistantReply(workspace, prompt, summary);
+    return jsonResponse(200, mode === "motivation"
+      ? { ok: true, model, quote: fallback, fallback: true }
+      : { ok: true, model, text: fallback, fallback: true });
+  }
+}
+
+function normalizeWorkspaceObject(workspace) {
+  if (!workspace || typeof workspace !== "object") {
+    return {};
+  }
+
+  const normalized = {};
+  for (const key of ["id", "label", "title", "description"]) {
+    if (String(workspace[key] || "").trim()) {
+      normalized[key] = String(workspace[key]).trim();
+    }
+  }
+  return normalized;
+}
+
+function buildWorkspaceSummary(workspace, summary) {
+  const normalized = {};
+  const source = summary && typeof summary === "object" ? summary : {};
+  for (const key of ["dayLabel", "nextAction", "tasksSummary", "scheduleSummary", "studySummary", "storySummary", "homeSummary"]) {
+    if (String(source[key] || "").trim()) {
+      normalized[key] = String(source[key]).trim();
+    }
+  }
+
+  if (!normalized.dayLabel) {
+    normalized.dayLabel = "Today";
+  }
+
+  return normalized;
+}
+
+function normalizeAIMessages(messages, prompt) {
+  const normalized = (Array.isArray(messages) ? messages : [])
+    .map((message) => {
+      const role = message?.role === "assistant" ? "assistant" : "user";
+      const text = String(message?.content || "").trim();
+      if (!text) {
+        return null;
+      }
+
+      return {
+        role,
+        content: [{ text }]
+      };
+    })
+    .filter(Boolean);
+
+  if (!normalized.length && prompt) {
+    normalized.push({
+      role: "user",
+      content: [{ text: prompt }]
+    });
+  }
+
+  return normalized;
+}
+
+function generateLocalMotivationQuote(workspace) {
+  const index = Math.floor(Math.random() * LOCAL_MOTIVATION_QUOTES.length);
+  const quote = LOCAL_MOTIVATION_QUOTES[index] || "Keep the next step small and visible.";
+  const workspaceLabel = workspace?.label || workspace?.title || workspace?.id || "workspace";
+  return String(quote).replace(/\bworkspace\b/gi, workspaceLabel);
+}
+
+function buildAISystemPrompt({ mode, workspace, summary, style }) {
+  const workspaceLabel = workspace.label || workspace.title || workspace.id || "workspace";
+  const summaryLines = [
+    summary?.dayLabel ? `Day: ${summary.dayLabel}` : "",
+    summary?.nextAction ? `Next action: ${summary.nextAction}` : "",
+    summary?.tasksSummary ? `Tasks: ${summary.tasksSummary}` : "",
+    summary?.scheduleSummary ? `Schedule: ${summary.scheduleSummary}` : "",
+    summary?.studySummary ? `Study: ${summary.studySummary}` : "",
+    summary?.storySummary ? `Stories: ${summary.storySummary}` : "",
+    summary?.homeSummary ? `Home: ${summary.homeSummary}` : ""
+  ].filter(Boolean);
+
+  const guidance = mode === "motivation"
+    ? [
+        "Write one short motivational sentence.",
+        "Keep it practical, warm, and encouraging.",
+        "Do not add a title, bullets, or markdown.",
+        "Do not summarize the workspace unless it helps the quote."
+      ]
+    : [
+        "Reply concisely and helpfully using the workspace context.",
+        "If the user asks for a summary, keep it short.",
+        "If the user asks what to do next, suggest one clear next action.",
+        "Do not add a title or markdown unless it helps."
+      ];
+
+  return [
+    `You are the MyAxis assistant for the ${workspaceLabel} workspace.`,
+    style || "",
+    ...guidance,
+    summaryLines.length ? `Workspace context: ${summaryLines.join(" | ")}` : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+async function invokeBedrockAI({ mode, model, workspace, summary, prompt, messages, style }) {
+  const system = [{ text: buildAISystemPrompt({ mode, workspace, summary, style }) }];
+  const conversation = Array.isArray(messages) && messages.length
+    ? messages
+    : [{
+        role: "user",
+        content: [{
+          text: mode === "motivation"
+            ? `Write a short motivational quote for the ${workspace.label || workspace.id || "workspace"} workspace.`
+            : prompt || `Reply using the workspace context for the ${workspace.label || workspace.id || "workspace"} workspace.`
+        }]
+      }];
+
+  const response = await bedrock.send(
+    new ConverseCommand({
+      modelId: model,
+      messages: conversation,
+      system,
+      inferenceConfig: {
+        maxTokens: mode === "motivation" ? 96 : 256,
+        temperature: mode === "motivation" ? 0.8 : 0.4,
+        topP: 0.9
+      }
+    })
+  );
+
+  const text = extractBedrockText(response);
+  if (!text) {
+    throw new Error("Bedrock returned no text.");
+  }
+
+  return text;
+}
+
+function generateLocalAssistantReply(workspace, prompt, summary) {
+  const normalizedPrompt = String(prompt || "").toLowerCase();
+  const nextAction = summary?.nextAction || "No obvious next action yet.";
+  const dayLabel = summary?.dayLabel || `${workspace.label || workspace.title || workspace.id || "workspace"} today`;
+
+  if (normalizedPrompt.includes("summarize") || normalizedPrompt.includes("summary")) {
+    return `${dayLabel}. ${summary?.tasksSummary || ""} ${summary?.scheduleSummary || ""}`.trim();
+  }
+
+  if (normalizedPrompt.includes("next") || normalizedPrompt.includes("what should i do")) {
+    return `Your next action is ${nextAction} ${summary?.scheduleSummary || ""}`.trim();
+  }
+
+  if (normalizedPrompt.includes("study")) {
+    return summary?.studySummary || "There are no study cards in this workspace yet.";
+  }
+
+  if (normalizedPrompt.includes("work story") || normalizedPrompt.includes("story")) {
+    return summary?.storySummary || "There are no work story cards in this workspace yet.";
+  }
+
+  if (normalizedPrompt.includes("home") || normalizedPrompt.includes("menu") || normalizedPrompt.includes("grocery")) {
+    return summary?.homeSummary || "This workspace is not using home planning mode.";
+  }
+
+  if (normalizedPrompt.includes("schedule")) {
+    return summary?.scheduleSummary || "There is no scheduled item in the selected day yet.";
+  }
+
+  if (normalizedPrompt.includes("task") || normalizedPrompt.includes("todo")) {
+    return summary?.tasksSummary || "There are no tasks in this workspace yet.";
+  }
+
+  return `${dayLabel}. ${nextAction} I can also summarize tasks, schedule, study prompts, or work stories if you want.`;
+}
+
+function extractBedrockText(response) {
+  const content = Array.isArray(response?.output?.message?.content) ? response.output.message.content : [];
+  const text = content
+    .map((item) => String(item?.text || "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  if (text) {
+    return text;
+  }
+
+  if (String(response?.output_text || "").trim()) {
+    return String(response.output_text).trim();
+  }
+
+  return "";
 }
 
 async function handleWorkspaceSettings(method, user, workspaceId, event) {

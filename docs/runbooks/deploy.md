@@ -58,7 +58,7 @@ The deployed build can receive provider app IDs from runtime config so normal us
 
 When these are set, the dashboard shows user-facing actions like `Login to Spotify` and `Link calendar` instead of setup fields.
 
-AI can also be configured through runtime config:
+AI can also be configured through runtime config and the authenticated `/v1/ai` backend route:
 
 - `MYAXIS_AI_MODEL`
 

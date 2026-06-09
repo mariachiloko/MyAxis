@@ -956,6 +956,22 @@ async function resolveAIText({ mode, workspace, prompt = "", messages = [] }) {
     }
   }
 
+  const backendSync = getBackendSyncConfig();
+  if (backendSync.baseUrl) {
+    try {
+      const payload = await backendRequest("/v1/ai", {
+        method: "POST",
+        body: buildAIRequest({ mode, workspace, prompt, messages })
+      });
+      const text = extractAIText(payload, mode);
+      if (text) {
+        return text;
+      }
+    } catch (error) {
+      console.warn("Cloud AI endpoint failed, using fallback.", error);
+    }
+  }
+
   return mode === "motivation"
     ? generateLocalMotivationQuote(workspace)
     : generateLocalAssistantReply(workspace, prompt);

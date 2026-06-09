@@ -39,3 +39,9 @@ variable "lambda_timeout_seconds" {
   description = "Default timeout for the API Lambda."
   default     = 10
 }
+
+variable "ai_model" {
+  type        = string
+  description = "Default AI model for the Lambda backend."
+  default     = "amazon.nova-micro-v1:0"
+}

@@ -44,6 +44,15 @@ data "aws_iam_policy_document" "lambda_data" {
       aws_dynamodb_table.workspace_state.arn
     ]
   }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream"
+    ]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "lambda_data" {
@@ -66,6 +75,7 @@ resource "aws_lambda_function" "api" {
   environment {
     variables = {
       APP_NAME                   = var.app_name
+      AI_MODEL_DEFAULT           = var.ai_model
       USERS_TABLE                = aws_dynamodb_table.users.name
       WORKSPACE_SETTINGS_TABLE   = aws_dynamodb_table.workspace_settings.name
       CALENDAR_CONNECTIONS_TABLE = aws_dynamodb_table.calendar_connections.name
