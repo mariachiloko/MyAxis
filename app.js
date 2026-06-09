@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   layout: "workspace-dashboard:layout",
   calendarView: "workspace-dashboard:calendar-view",
   calendarAnchor: "workspace-dashboard:calendar-anchor",
+  calendarSelectedDate: "workspace-dashboard:calendar-selected-date",
   scheduleDay: "workspace-dashboard:schedule-day",
   captureMode: "workspace-dashboard:capture-mode",
   captureFollow: "workspace-dashboard:capture-follow",
@@ -56,14 +57,13 @@ const MOTIVATION_QUOTES = [
   "You can build this one careful piece at a time."
 ];
 const DEFAULT_LAYOUT = {
-  order: ["hero", "weather", "spotify", "capture", "schedule", "calendar", "kanban", "spotlight"],
+  order: ["hero", "weather", "spotify", "capture", "schedule", "kanban", "spotlight"],
   spans: {
     hero: 12,
     weather: 4,
     spotify: 4,
     capture: 6,
     schedule: 6,
-    calendar: 8,
     kanban: 8,
     spotlight: 8,
   }
@@ -73,7 +73,6 @@ const DEFAULT_WIDGET_VISIBILITY = {
   spotify: true,
   capture: true,
   schedule: true,
-  calendar: true,
   kanban: true,
   spotlight: true
 };
@@ -126,6 +125,7 @@ const appState = {
   spotifyPlaylistAdvanceTimer: null,
   calendarView: getStoredCalendarView(),
   calendarAnchor: getStoredCalendarAnchor(),
+  calendarSelectedDate: getStoredCalendarSelectedDate(),
   scheduleDay: getStoredScheduleDay(),
   backendStateSyncTimers: new Map(),
   backendStateSyncSuspended: false
@@ -402,8 +402,6 @@ function wireThemeControls() {
 }
 
 function wireCalendarControls() {
-  calendarViewWeekEl.addEventListener("click", () => setCalendarView("week"));
-  calendarViewMonthEl.addEventListener("click", () => setCalendarView("month"));
   calendarPrevEl.addEventListener("click", () => shiftCalendar(-1));
   calendarNextEl.addEventListener("click", () => shiftCalendar(1));
   calendarLinkEl?.addEventListener("click", () => {
@@ -433,10 +431,9 @@ function populateEditorSelects() {
 
   const dayOptions = DAY_ORDER.map((day) => `<option value="${escapeHtml(day)}">${escapeHtml(day)}</option>`).join("");
 
-  for (const selectEl of [workspaceSettingsWorkspaceEl, workspaceSettingsDefaultEl, taskFormWorkspaceEl, calendarFormWorkspaceEl, scheduleFormWorkspaceEl]) {
-    selectEl.innerHTML = workspaceOptions;
+  if (workspaceSettingsWorkspaceEl) {
+    workspaceSettingsWorkspaceEl.innerHTML = workspaceOptions;
   }
-  flashcardFormWorkspaceEl.innerHTML = workspaceOptions;
 
   calendarFormDayEl.innerHTML = dayOptions;
   scheduleFormDayEl.innerHTML = dayOptions;
@@ -471,7 +468,7 @@ function wireDrawerControls() {
     }
     openTaskEditor("", appState.workspaceId);
   });
-  scheduleNewEl.addEventListener("click", () => openScheduleEditor("", appState.workspaceId, appState.scheduleDay));
+  scheduleNewEl?.addEventListener("click", () => openScheduleEditor("", appState.workspaceId, appState.scheduleDay));
   flashcardNewEl.addEventListener("click", () => {
     if (appState.workspaceId === "work") {
       openStoryEditor("", appState.workspaceId);
@@ -493,7 +490,7 @@ function wireDrawerControls() {
   });
   homeCalendarDisconnectEl?.addEventListener("click", disconnectHomeGoogleCalendar);
   taskFormEl.addEventListener("submit", handleTaskSubmit);
-  taskFormClearEl.addEventListener("click", () => openTaskEditor("", taskFormWorkspaceEl.value || appState.workspaceId));
+  taskFormClearEl.addEventListener("click", () => openTaskEditor("", appState.workspaceId));
   taskFormDeleteEl.addEventListener("click", deleteTaskFromEditor);
   taskFormAddSubtaskEl.addEventListener("click", addTaskSubtaskRow);
   taskFormSubtasksEl.addEventListener("click", (event) => {
@@ -505,16 +502,16 @@ function wireDrawerControls() {
     removeTaskSubtaskRow(deleteButton.closest("[data-subtask-row]"));
   });
   scheduleFormEl.addEventListener("submit", handleScheduleSubmit);
-  scheduleFormClearEl.addEventListener("click", () => openScheduleEditor("", scheduleFormWorkspaceEl.value || appState.workspaceId, scheduleFormDayEl.value || appState.scheduleDay));
+  scheduleFormClearEl.addEventListener("click", () => openScheduleEditor("", appState.workspaceId, scheduleFormDayEl.value || appState.scheduleDay));
   scheduleFormDeleteEl.addEventListener("click", deleteScheduleFromEditor);
   calendarFormEl.addEventListener("submit", handleCalendarSubmit);
-  calendarFormClearEl.addEventListener("click", () => openCalendarEditor("", calendarFormWorkspaceEl.value || appState.workspaceId));
+  calendarFormClearEl.addEventListener("click", () => openCalendarEditor("", appState.workspaceId));
   calendarFormDeleteEl.addEventListener("click", deleteCalendarFromEditor);
   storyFormEl.addEventListener("submit", handleStorySubmit);
   storyFormClearEl.addEventListener("click", () => openStoryEditor("", appState.workspaceId));
   storyFormDeleteEl.addEventListener("click", deleteStoryFromEditor);
   flashcardFormEl.addEventListener("submit", handleFlashcardSubmit);
-  flashcardFormClearEl.addEventListener("click", () => openFlashcardEditor("", flashcardFormWorkspaceEl.value || appState.workspaceId));
+  flashcardFormClearEl.addEventListener("click", () => openFlashcardEditor("", appState.workspaceId));
   flashcardFormDeleteEl.addEventListener("click", deleteFlashcardFromEditor);
   weatherFormEl?.addEventListener("submit", (event) => {
     handleWeatherSubmit(event).catch((error) => {
@@ -560,34 +557,8 @@ function wireDrawerControls() {
     handleSpotifyLogoutClick();
   });
 
-  workspaceSettingsWorkspaceEl.addEventListener("change", () => {
+  workspaceSettingsWorkspaceEl?.addEventListener("change", () => {
     fillWorkspaceSettingsForm(workspaceSettingsWorkspaceEl.value);
-    fillSpotifyForm(workspaceSettingsWorkspaceEl.value);
-  });
-
-  taskFormWorkspaceEl.addEventListener("change", () => {
-    renderColumnOptions(taskFormWorkspaceEl.value);
-    taskFormCardIdEl.value = "";
-    taskFormDeleteEl.disabled = true;
-    fillTaskForm(taskFormWorkspaceEl.value, "");
-  });
-
-  scheduleFormWorkspaceEl.addEventListener("change", () => {
-    scheduleFormItemIdEl.value = "";
-    scheduleFormDeleteEl.disabled = true;
-    fillScheduleForm(scheduleFormWorkspaceEl.value, "");
-  });
-
-  calendarFormWorkspaceEl.addEventListener("change", () => {
-    calendarFormEventIndexEl.value = "";
-    calendarFormDeleteEl.disabled = true;
-    fillCalendarForm(calendarFormWorkspaceEl.value, "");
-  });
-
-  flashcardFormWorkspaceEl.addEventListener("change", () => {
-    flashcardFormCardIdEl.value = "";
-    flashcardFormDeleteEl.disabled = true;
-    fillFlashcardForm(flashcardFormWorkspaceEl.value, "");
   });
 
   document.addEventListener("keydown", (event) => {
@@ -728,8 +699,8 @@ function closeCalendarLinkModal() {
 function renderSchedule(schedule, calendarEvents = []) {
   const workspace = getWorkspace(appState.workspaceId);
   const scheduleEntries = getScheduleState(workspace);
-  const selectedDay = appState.scheduleDay;
-  const selectedDate = getSelectedScheduleDate();
+  const selectedDate = getSelectedAgendaDate();
+  const selectedDay = getDayLabel(selectedDate);
   const selectedSchedule = scheduleEntries
     .filter((item) => item.day === selectedDay)
     .map((item) => ({
@@ -1111,21 +1082,42 @@ function renderWeatherMarkup({ settings, weather, loading }) {
       ? "Loading weather..."
       : "Pick a city or use your current location.";
   const updatedLabel = weather?.updatedAt ? `Updated ${formatRelativeSyncTime(weather.updatedAt)}` : "";
+  const hourlyMarkup = Array.isArray(weather?.hourly) && weather.hourly.length
+    ? `
+      <div class="weather-hourly">
+        ${weather.hourly
+          .map(
+            (hour) => `
+              <div class="weather-hourly-item">
+                <span class="weather-hourly-time">${escapeHtml(hour.label)}</span>
+                <span class="weather-hourly-icon">${escapeHtml(getWeatherEmoji(hour.icon))}</span>
+                <strong>${escapeHtml(`${hour.temperature}°`)}</strong>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    `
+    : "";
 
   return `
     <div class="weather-card">
       <div class="weather-card-top">
         <strong>${escapeHtml(locationLabel)}</strong>
-        <div class="weather-card-top-actions">
-          <button class="tag-chip tag-chip--weather tag-chip--button" type="button" data-weather-action="open-settings" aria-label="Open weather settings">${escapeHtml(settings.useLocation ? "Location" : "City")}</button>
-        </div>
+        <button class="tag-chip tag-chip--weather tag-chip--button" type="button" data-weather-action="open-settings" aria-label="Open weather settings">${escapeHtml(settings.useLocation ? "Location" : "City")}</button>
       </div>
-      <div class="weather-temperature">${escapeHtml(weather ? `${weather.temperature}°` : "--")}</div>
+      <div class="weather-center">
+        <div class="weather-icon">${escapeHtml(getWeatherEmoji(weather?.summary))}</div>
+        <div class="weather-temperature">${escapeHtml(weather ? `${weather.temperature}°` : "--")}</div>
+      </div>
       <p class="weather-summary">${escapeHtml(currentSummary)}</p>
       <div class="weather-meta">
-        <span>${escapeHtml(weather?.feelsLike ? `Feels like ${weather.feelsLike}°` : "")}</span>
+        <span>${escapeHtml(weather?.high != null ? `H ${weather.high}°` : "")}</span>
+        <span>${escapeHtml(weather?.low != null ? `L ${weather.low}°` : "")}</span>
+        <span>${escapeHtml(weather?.feelsLike ? `Feels ${weather.feelsLike}°` : "")}</span>
         <span>${escapeHtml(updatedLabel)}</span>
       </div>
+      ${hourlyMarkup}
       <div class="weather-actions">
         <button class="button button-compact" type="button" data-weather-action="refresh" ${loading ? "disabled" : ""}>${escapeHtml(loading ? "Refreshing..." : "Refresh")}</button>
       </div>
@@ -1173,6 +1165,9 @@ async function refreshWeather(workspaceId, force = false) {
     url.searchParams.set("latitude", String(location.latitude));
     url.searchParams.set("longitude", String(location.longitude));
     url.searchParams.set("current", "temperature_2m,weather_code,apparent_temperature,wind_speed_10m");
+    url.searchParams.set("hourly", "temperature_2m,weather_code");
+    url.searchParams.set("daily", "temperature_2m_max,temperature_2m_min,weather_code");
+    url.searchParams.set("forecast_days", "2");
     url.searchParams.set("temperature_unit", "fahrenheit");
     url.searchParams.set("wind_speed_unit", "mph");
     url.searchParams.set("timezone", "auto");
@@ -1184,11 +1179,17 @@ async function refreshWeather(workspaceId, force = false) {
 
     const payload = await response.json();
     const current = payload?.current || {};
+    const hourly = payload?.hourly || {};
+    const daily = payload?.daily || {};
+    const hourlyForecast = buildWeatherHourlyForecast(hourly, current.time, 4);
     const weather = {
       locationLabel: location.label,
       temperature: Math.round(Number(current.temperature_2m || current.apparent_temperature || 0)),
       feelsLike: Math.round(Number(current.apparent_temperature || current.temperature_2m || 0)),
       summary: getWeatherCodeLabel(current.weather_code),
+      high: Number.isFinite(Number(daily.temperature_2m_max?.[0])) ? Math.round(Number(daily.temperature_2m_max[0])) : null,
+      low: Number.isFinite(Number(daily.temperature_2m_min?.[0])) ? Math.round(Number(daily.temperature_2m_min[0])) : null,
+      hourly: hourlyForecast,
       unit: "F",
       updatedAt: new Date().toISOString()
     };
@@ -1239,6 +1240,62 @@ function getWeatherCodeLabel(code) {
     95: "Thunderstorms"
   };
   return labels[numeric] || "Weather";
+}
+
+function getWeatherEmoji(label) {
+  const normalized = String(label || "").toLowerCase();
+  if (normalized.includes("thunder")) {
+    return "⛈";
+  }
+  if (normalized.includes("snow")) {
+    return "❄";
+  }
+  if (normalized.includes("rain") || normalized.includes("drizzle") || normalized.includes("shower")) {
+    return "☔";
+  }
+  if (normalized.includes("fog")) {
+    return "🌫";
+  }
+  if (normalized.includes("clear")) {
+    return "☀";
+  }
+  if (normalized.includes("cloud")) {
+    return "☁";
+  }
+  return "⛅";
+}
+
+function buildWeatherHourlyForecast(hourly, currentTime, count = 4) {
+  const times = Array.isArray(hourly?.time) ? hourly.time : [];
+  const temperatures = Array.isArray(hourly?.temperature_2m) ? hourly.temperature_2m : [];
+  const weatherCodes = Array.isArray(hourly?.weather_code) ? hourly.weather_code : [];
+  if (!times.length) {
+    return [];
+  }
+
+  const currentIndex = Math.max(0, times.findIndex((value) => String(value) === String(currentTime)));
+  const startIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+  return times
+    .slice(startIndex, startIndex + count)
+    .map((time, index) => ({
+      time,
+      temperature: Math.round(Number(temperatures[startIndex + index] || 0)),
+      label: formatWeatherHourLabel(time),
+      icon: getWeatherCodeLabel(weatherCodes[startIndex + index] || 0)
+    }))
+    .filter((item) => Number.isFinite(item.temperature));
+}
+
+function formatWeatherHourLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: undefined
+  }).replace(/:00\s*/, " ");
 }
 
 function getMotivationQuoteStorageKey(workspaceId) {
@@ -1333,20 +1390,12 @@ function renderCalendar(events) {
   const connection = getHomeCalendarConnection(workspace.id);
   const settingsOpen = getStoredCalendarSettingsOpen(workspace.id);
   const anchor = new Date(appState.calendarAnchor);
-  const isWeekView = appState.calendarView === "week";
-  const renderData = isWeekView ? buildWeekView(events, anchor) : buildMonthView(events, anchor);
-
-  if (calendarViewWeekEl) {
-    calendarViewWeekEl.setAttribute("aria-pressed", String(isWeekView));
-  }
-  if (calendarViewMonthEl) {
-    calendarViewMonthEl.setAttribute("aria-pressed", String(!isWeekView));
-  }
+  const renderData = buildMonthView(events, anchor);
 
   calendarRangeLabelEl.textContent = renderData.label;
   calendarRangeDetailEl.textContent = renderData.detail;
-  calendarGridEl.classList.toggle("calendar-grid--week", isWeekView);
-  calendarGridEl.classList.toggle("calendar-grid--month", !isWeekView);
+  calendarGridEl.classList.remove("calendar-grid--week");
+  calendarGridEl.classList.add("calendar-grid--month");
   calendarGridEl.innerHTML = renderData.html;
 
   if (calendarSettingsEl) {
@@ -1393,7 +1442,12 @@ function renderCalendar(events) {
 
   calendarGridEl.onclick = (event) => {
     const actionButton = event.target.closest("[data-action]");
+    const dayCard = event.target.closest(".calendar-day");
     if (!actionButton) {
+      if (dayCard?.dataset.calendarDate) {
+        setSelectedAgendaDate(dayCard.dataset.calendarDate);
+        renderWorkspace(getWorkspace(appState.workspaceId));
+      }
       return;
     }
 
@@ -1543,21 +1597,14 @@ function buildMonthView(events, anchor) {
       }
 
       const day = new Date(monthStart.getFullYear(), monthStart.getMonth(), dayNumber);
-      const dayEvents = getEventsForDate(events, day);
       const isToday = sameDate(day, new Date());
+      const isSelected = sameDate(day, getSelectedAgendaDate());
       const dayKey = getDayLabel(day);
       return `
-        <article class="calendar-day calendar-day--month ${isToday ? "calendar-day--today" : ""}" data-day="${escapeHtml(dayKey)}">
+        <article class="calendar-day calendar-day--month ${isToday ? "calendar-day--today" : ""} ${isSelected ? "calendar-day--selected" : ""}" data-day="${escapeHtml(dayKey)}" data-calendar-date="${escapeHtml(formatDateKey(day))}">
           <header>
-            <span class="calendar-day-label">${escapeHtml(day.toLocaleDateString(undefined, { weekday: "short" }))}</span>
             <strong class="calendar-day-number">${escapeHtml(String(day.getDate()))}</strong>
           </header>
-          <div class="stack-list">
-            ${renderCalendarEvents(dayEvents, true, dayKey)}
-          </div>
-          <div class="calendar-day-actions">
-            <button class="mini-button" type="button" data-action="add-calendar-event">Add event</button>
-          </div>
         </article>
       `;
     }).join("")
@@ -1577,9 +1624,10 @@ function buildWeekView(events, anchor) {
       const day = addDays(weekStart, index);
       const dayEvents = getEventsForDate(events, day);
       const isToday = sameDate(day, new Date());
+      const isSelected = sameDate(day, getSelectedAgendaDate());
       const dayKey = getDayLabel(day);
       return `
-        <article class="calendar-day calendar-day--week ${isToday ? "calendar-day--today" : ""}" data-day="${escapeHtml(dayKey)}">
+        <article class="calendar-day calendar-day--week ${isToday ? "calendar-day--today" : ""} ${isSelected ? "calendar-day--selected" : ""}" data-day="${escapeHtml(dayKey)}" data-calendar-date="${escapeHtml(formatDateKey(day))}">
           <header>
             <span class="calendar-day-label">${escapeHtml(day.toLocaleDateString(undefined, { weekday: "short" }))}</span>
             <strong class="calendar-day-number">${escapeHtml(formatMonthDay(day))}</strong>
@@ -1633,11 +1681,7 @@ function renderCalendarEvents(dayEvents, compact = false, dayLabel = "") {
 
 function shiftCalendar(direction) {
   const anchor = new Date(appState.calendarAnchor);
-  if (appState.calendarView === "week") {
-    anchor.setDate(anchor.getDate() + direction * 7);
-  } else {
-    anchor.setMonth(anchor.getMonth() + direction);
-  }
+  anchor.setMonth(anchor.getMonth() + direction);
   setCalendarAnchor(anchor);
 }
 
@@ -1665,15 +1709,43 @@ function getStoredCalendarAnchor() {
   return normalizeDate(storedAnchor || new Date()).toISOString();
 }
 
+function getStoredCalendarSelectedDate() {
+  const storedDate = localStorage.getItem(STORAGE_KEYS.calendarSelectedDate);
+  if (storedDate) {
+    return normalizeDate(storedDate).toISOString();
+  }
+  return normalizeDate(new Date()).toISOString();
+}
+
 function getStoredScheduleDay() {
   const storedDay = localStorage.getItem(STORAGE_KEYS.scheduleDay);
   return DAY_ORDER.includes(storedDay) ? storedDay : getDayLabel(new Date());
 }
 
+function getSelectedAgendaDate() {
+  if (appState.calendarSelectedDate) {
+    return normalizeDate(appState.calendarSelectedDate);
+  }
+  return getSelectedScheduleDate();
+}
+
 function getSelectedScheduleDate() {
   const anchor = startOfWeek(new Date(appState.calendarAnchor));
   const dayIndex = DAY_ORDER.indexOf(appState.scheduleDay);
-  return addDays(anchor, dayIndex === -1 ? 0 : dayIndex);
+  const fallbackDate = addDays(anchor, dayIndex === -1 ? 0 : dayIndex);
+  if (!appState.calendarSelectedDate) {
+    return fallbackDate;
+  }
+  const selected = normalizeDate(appState.calendarSelectedDate);
+  return Number.isNaN(selected.getTime()) ? fallbackDate : selected;
+}
+
+function setSelectedAgendaDate(value) {
+  const nextDate = normalizeDate(value);
+  appState.calendarSelectedDate = nextDate.toISOString();
+  localStorage.setItem(STORAGE_KEYS.calendarSelectedDate, formatDateKey(nextDate));
+  appState.scheduleDay = getDayLabel(nextDate);
+  localStorage.setItem(STORAGE_KEYS.scheduleDay, appState.scheduleDay);
 }
 
 function renderKanban(workspace) {
@@ -2319,8 +2391,7 @@ function getWidgetVisibilityLabel(widgetId) {
     weather: "Weather",
     spotify: "Spotify",
     capture: "Capture",
-    schedule: "Schedule",
-    calendar: "Calendar",
+    schedule: "Agenda",
     kanban: "Task board",
     spotlight: "Study / stories"
   }[widgetId] || widgetId;
@@ -3476,7 +3547,7 @@ function syncDrawerSelections() {
     return;
   }
 
-  fillWorkspaceSettingsForm(workspaceSettingsWorkspaceEl.value || appState.workspaceId);
+  fillWorkspaceSettingsForm(appState.workspaceId);
   if (appState.drawerMode === "workspace-create") {
     seedWorkspaceCreateForm();
     syncWorkspaceCreateForm();
@@ -3489,18 +3560,18 @@ function syncDrawerSelections() {
     return;
   }
   if (appState.editingTask || taskFormCardIdEl.value) {
-    fillTaskForm(taskFormWorkspaceEl.value || appState.workspaceId, taskFormCardIdEl.value || appState.editingTask?.cardId || "");
+    fillTaskForm(appState.editingTask?.workspaceId || appState.workspaceId, taskFormCardIdEl.value || appState.editingTask?.cardId || "");
   }
   if (appState.editingSchedule || scheduleFormItemIdEl.value) {
     fillScheduleForm(
-      scheduleFormWorkspaceEl.value || appState.workspaceId,
+      appState.editingSchedule?.workspaceId || appState.workspaceId,
       scheduleFormItemIdEl.value || String(appState.editingSchedule?.itemId ?? ""),
       scheduleFormDayEl.value || appState.scheduleDay
     );
   }
   if (appState.editingEvent || calendarFormEventIndexEl.value) {
     fillCalendarForm(
-      calendarFormWorkspaceEl.value || appState.workspaceId,
+      appState.editingEvent?.workspaceId || appState.workspaceId,
       calendarFormEventIndexEl.value || String(appState.editingEvent?.eventIndex ?? "")
     );
   }
@@ -3509,7 +3580,7 @@ function syncDrawerSelections() {
   }
   if (appState.editingFlashcard || flashcardFormCardIdEl.value) {
     fillFlashcardForm(
-      flashcardFormWorkspaceEl.value || appState.workspaceId,
+      appState.editingFlashcard?.workspaceId || appState.workspaceId,
       flashcardFormCardIdEl.value || String(appState.editingFlashcard?.cardId ?? "")
     );
   }
@@ -3554,13 +3625,14 @@ function syncDrawerMode() {
 
 function fillWorkspaceSettingsForm(workspaceId) {
   const workspace = getWorkspace(workspaceId);
-  workspaceSettingsWorkspaceEl.value = workspace.id;
+  if (workspaceSettingsWorkspaceEl) {
+    workspaceSettingsWorkspaceEl.value = workspace.id;
+  }
   workspaceSettingsLabelEl.value = workspace.label || "";
   workspaceSettingsTitleEl.value = workspace.title || "";
   workspaceSettingsDescriptionEl.value = workspace.description || "";
   workspaceSettingsAccentEl.value = normalizeHexColor(workspace.accent || defaultConfig.workspaces[0].accent);
   workspaceSettingsAccent2El.value = normalizeHexColor(workspace.accent2 || defaultConfig.workspaces[0].accent2);
-  workspaceSettingsDefaultEl.value = config.defaultWorkspace || defaultConfig.defaultWorkspace || config.workspaces[0].id;
   if (workspaceSettingsDeleteEl) {
     const builtIn = isBuiltInWorkspace(workspace.id);
     workspaceSettingsDeleteEl.disabled = builtIn;
@@ -3572,7 +3644,7 @@ function fillWorkspaceSettingsForm(workspaceId) {
 }
 
 function getDrawerWorkspaceId() {
-  return workspaceSettingsWorkspaceEl?.value || appState.workspaceId;
+  return appState.workspaceId;
 }
 
 function fillWeatherForm(workspaceId) {
@@ -6448,7 +6520,7 @@ function formatRelativeSyncTime(value) {
 
 function handleHomeCalendarSubmit(event) {
   event.preventDefault();
-  if (workspaceSettingsWorkspaceEl.value !== "home") {
+  if (appState.workspaceId !== "home") {
     return;
   }
 
@@ -6690,7 +6762,7 @@ async function syncHomeGoogleCalendar(workspaceId, options = {}) {
 }
 
 function updateHomeCalendarStatus(workspaceId, message) {
-  if (workspaceSettingsWorkspaceEl.value !== workspaceId || !homeCalendarStatusEl) {
+  if (workspaceId !== appState.workspaceId || !homeCalendarStatusEl) {
     return;
   }
 
@@ -6956,7 +7028,6 @@ function fillTaskForm(workspaceId, cardId, columnId = "") {
   const cardEntry = cardId ? findKanbanCard(state, cardId) : null;
   const targetColumnId = cardEntry?.columnId || columnId || workspace.kanban[0]?.id || "";
 
-  taskFormWorkspaceEl.value = workspace.id;
   renderColumnOptions(workspace.id);
   taskFormColumnEl.value = targetColumnId;
   taskFormCardIdEl.value = cardEntry?.card.id || "";
@@ -6990,7 +7061,7 @@ function openTaskEditor(cardId = "", workspaceId = appState.workspaceId, columnI
 
 function handleTaskSubmit(event) {
   event.preventDefault();
-  const workspaceId = taskFormWorkspaceEl.value;
+  const workspaceId = appState.editingTask?.workspaceId || appState.workspaceId;
   const workspace = getWorkspace(workspaceId);
   const state = getKanbanState(workspace);
   let columnId = taskFormColumnEl.value;
@@ -7046,7 +7117,7 @@ function handleTaskSubmit(event) {
 
 function deleteTaskFromEditor() {
   const cardId = taskFormCardIdEl.value;
-  const workspaceId = taskFormWorkspaceEl.value;
+  const workspaceId = appState.editingTask?.workspaceId || appState.workspaceId;
   if (!cardId) {
     return;
   }
@@ -7264,7 +7335,6 @@ function fillScheduleForm(workspaceId, itemId, dayOverride = "", sourceDefaults 
   const items = getScheduleState(workspace);
   const item = itemId ? items.find((entry) => entry.id === itemId) : null;
 
-  scheduleFormWorkspaceEl.value = workspace.id;
   scheduleFormDayEl.value = dayOverride || item?.day || appState.scheduleDay || DAY_ORDER[0];
   scheduleFormItemIdEl.value = item?.id || "";
   scheduleFormTimeEl.value = normalizeTime(item?.time || sourceDefaults?.time || "09:00");
@@ -7286,7 +7356,7 @@ function openScheduleEditor(itemId = "", workspaceId = appState.workspaceId, day
 
 function handleScheduleSubmit(event) {
   event.preventDefault();
-  const workspaceId = scheduleFormWorkspaceEl.value;
+  const workspaceId = appState.editingSchedule?.workspaceId || appState.workspaceId;
   const workspace = getWorkspace(workspaceId);
   const entries = [...getScheduleState(workspace)];
   const payload = {
@@ -7328,7 +7398,7 @@ function handleScheduleSubmit(event) {
 }
 
 function deleteScheduleFromEditor() {
-  const workspaceId = scheduleFormWorkspaceEl.value;
+  const workspaceId = appState.editingSchedule?.workspaceId || appState.workspaceId;
   const workspace = getWorkspace(workspaceId);
   const entries = [...getScheduleState(workspace)];
   const itemId = scheduleFormItemIdEl.value;
@@ -8052,10 +8122,9 @@ function deleteHomeListItem(workspaceId, listName, itemId) {
 }
 
 function shiftScheduleDay(direction) {
-  const currentIndex = DAY_ORDER.indexOf(appState.scheduleDay);
-  const nextIndex = (currentIndex + direction + DAY_ORDER.length) % DAY_ORDER.length;
-  appState.scheduleDay = DAY_ORDER[nextIndex];
-  localStorage.setItem(STORAGE_KEYS.scheduleDay, appState.scheduleDay);
+  const currentDate = getSelectedAgendaDate();
+  const nextDate = addDays(currentDate, direction);
+  setSelectedAgendaDate(nextDate);
   const workspace = getWorkspace(appState.workspaceId);
   renderSchedule(workspace.schedule, getMergedCalendarEvents(workspace));
 }
@@ -8065,7 +8134,6 @@ function fillCalendarForm(workspaceId, eventIndexValue, dayOverride = "") {
   const eventIndex = Number.parseInt(eventIndexValue, 10);
   const event = Number.isInteger(eventIndex) ? workspace.calendar?.[eventIndex] : null;
 
-  calendarFormWorkspaceEl.value = workspace.id;
   calendarFormEventIndexEl.value = Number.isInteger(eventIndex) ? String(eventIndex) : "";
   calendarFormDayEl.value = dayOverride || event?.day || DAY_ORDER[0];
   calendarFormTimeEl.value = normalizeTime(event?.time || "09:00");
@@ -8088,7 +8156,7 @@ function openCalendarEditor(eventIndex = "", workspaceId = appState.workspaceId,
 
 function handleCalendarSubmit(event) {
   event.preventDefault();
-  const workspaceId = calendarFormWorkspaceEl.value;
+  const workspaceId = appState.editingEvent?.workspaceId || appState.workspaceId;
   const workspace = getWorkspace(workspaceId);
   const events = Array.isArray(workspace.calendar) ? [...workspace.calendar] : [];
   const payload = {
@@ -8119,7 +8187,7 @@ function handleCalendarSubmit(event) {
 }
 
 function deleteCalendarFromEditor() {
-  const workspaceId = calendarFormWorkspaceEl.value;
+  const workspaceId = appState.editingEvent?.workspaceId || appState.workspaceId;
   const workspace = getWorkspace(workspaceId);
   const events = Array.isArray(workspace.calendar) ? [...workspace.calendar] : [];
   const eventIndex = Number.parseInt(calendarFormEventIndexEl.value, 10);
@@ -8151,7 +8219,6 @@ function fillFlashcardForm(workspaceId, cardId) {
   const cards = getFlashcardsState(workspace);
   const card = cardId ? cards.find((item) => item.id === cardId) : null;
 
-  flashcardFormWorkspaceEl.value = workspace.id;
   flashcardFormCardIdEl.value = card?.id || "";
   flashcardFormCategoryEl.value = card?.category || "study";
   flashcardFormQuestionEl.value = card?.question || "";
@@ -8196,7 +8263,7 @@ function openStoryEditor(cardId = "", workspaceId = appState.workspaceId) {
 
 function handleFlashcardSubmit(event) {
   event.preventDefault();
-  const workspaceId = flashcardFormWorkspaceEl.value;
+  const workspaceId = appState.editingFlashcard?.workspaceId || appState.workspaceId;
   const workspace = getWorkspace(workspaceId);
   const cards = [...getFlashcardsState(workspace)];
   const category = flashcardFormCategoryEl.value;
@@ -8282,7 +8349,7 @@ function handleStorySubmit(event) {
 }
 
 function deleteFlashcardFromEditor() {
-  const workspaceId = flashcardFormWorkspaceEl.value;
+  const workspaceId = appState.editingFlashcard?.workspaceId || appState.workspaceId;
   const workspace = getWorkspace(workspaceId);
   const cards = [...getFlashcardsState(workspace)];
   const cardId = flashcardFormCardIdEl.value;
@@ -8320,8 +8387,7 @@ function deleteStoryFromEditor() {
 
 function handleWorkspaceSettingsSubmit(event) {
   event.preventDefault();
-  const workspaceId = workspaceSettingsWorkspaceEl.value;
-  const defaultWorkspace = workspaceSettingsDefaultEl.value;
+  const workspaceId = appState.workspaceId;
   const patch = {
     id: workspaceId,
     label: workspaceSettingsLabelEl.value.trim(),
@@ -8337,7 +8403,6 @@ function handleWorkspaceSettingsSubmit(event) {
   }
 
   setWorkspaceOverride(workspaceId, patch);
-  setAppDefaultWorkspace(defaultWorkspace);
   config = mergeDashboardConfig(defaultConfig, importedConfig, runtimeConfig, localConfig, uiOverrides);
   populateEditorSelects();
   renderTabs();
@@ -8415,7 +8480,7 @@ async function handleWorkspaceCreateSubmit(event) {
 }
 
 async function handleWorkspaceDeleteClick() {
-  const workspaceId = workspaceSettingsWorkspaceEl.value;
+  const workspaceId = appState.workspaceId;
   if (!workspaceId) {
     return;
   }
@@ -8587,6 +8652,7 @@ function exportBackup() {
       layout: layoutState,
       calendarView: appState.calendarView,
       calendarAnchor: appState.calendarAnchor,
+      calendarSelectedDate: appState.calendarSelectedDate,
       scheduleDay: appState.scheduleDay,
       workspaces: config.workspaces.map((workspace) => ({
         id: workspace.id,
@@ -8672,6 +8738,10 @@ function applyStateBackup(state) {
   if (state.calendarAnchor) {
     appState.calendarAnchor = normalizeDate(state.calendarAnchor).toISOString();
     localStorage.setItem(STORAGE_KEYS.calendarAnchor, formatDateKey(state.calendarAnchor));
+  }
+
+  if (state.calendarSelectedDate) {
+    setSelectedAgendaDate(state.calendarSelectedDate);
   }
 
   if (DAY_ORDER.includes(state.scheduleDay)) {
