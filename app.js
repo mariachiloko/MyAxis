@@ -995,6 +995,17 @@ function getAIModel() {
 
 function buildAIRequest({ mode, workspace, prompt, messages }) {
   const summary = getWorkspaceAssistantSummary(workspace);
+  const assistantSummary = mode === "motivation"
+    ? summary
+    : {
+        dayLabel: "",
+        nextAction: "",
+        tasksSummary: "",
+        scheduleSummary: "",
+        studySummary: "",
+        storySummary: "",
+        homeSummary: ""
+      };
   return {
     mode,
     model: getAIModel(),
@@ -1004,20 +1015,12 @@ function buildAIRequest({ mode, workspace, prompt, messages }) {
       title: workspace.title || "",
       description: workspace.description || ""
     },
-    summary: {
-      dayLabel: summary.dayLabel,
-      nextAction: summary.nextAction,
-      tasksSummary: summary.tasksSummary,
-      scheduleSummary: summary.scheduleSummary,
-      studySummary: summary.studySummary,
-      storySummary: summary.storySummary,
-      homeSummary: summary.homeSummary
-    },
+    summary: assistantSummary,
     prompt: String(prompt || ""),
-    messages: Array.isArray(messages) ? messages.slice(-8) : [],
+    messages: Array.isArray(messages) ? messages.slice(-1) : [],
     style: mode === "motivation"
       ? "Short motivational quote, one sentence, practical and encouraging, no title, no markdown."
-      : "Reply concisely and helpfully using the workspace context."
+      : "Reply directly to the user's latest message. Be conversational. Do not summarize the workspace, mention next action, or restate schedule unless the user asks for it."
   };
 }
 
@@ -1407,7 +1410,7 @@ async function sendAssistantMessage(workspaceId, prompt) {
       mode: "assistant",
       workspace,
       prompt: input,
-      messages: assistantState.messages
+      messages: [{ role: "user", content: input }]
     });
   } catch (error) {
     console.warn("Assistant request failed.", error);

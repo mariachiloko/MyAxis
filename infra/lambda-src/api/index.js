@@ -272,16 +272,6 @@ function generateLocalMotivationQuote(workspace) {
 
 function buildAISystemPrompt({ mode, workspace, summary, style }) {
   const workspaceLabel = workspace.label || workspace.title || workspace.id || "workspace";
-  const summaryLines = [
-    summary?.dayLabel ? `Day: ${summary.dayLabel}` : "",
-    summary?.nextAction ? `Next action: ${summary.nextAction}` : "",
-    summary?.tasksSummary ? `Tasks: ${summary.tasksSummary}` : "",
-    summary?.scheduleSummary ? `Schedule: ${summary.scheduleSummary}` : "",
-    summary?.studySummary ? `Study: ${summary.studySummary}` : "",
-    summary?.storySummary ? `Stories: ${summary.storySummary}` : "",
-    summary?.homeSummary ? `Home: ${summary.homeSummary}` : ""
-  ].filter(Boolean);
-
   const guidance = mode === "motivation"
     ? [
         "Write one short motivational sentence.",
@@ -290,17 +280,16 @@ function buildAISystemPrompt({ mode, workspace, summary, style }) {
         "Do not summarize the workspace unless it helps the quote."
       ]
     : [
-        "Reply concisely and helpfully using the workspace context.",
-        "If the user asks for a summary, keep it short.",
-        "If the user asks what to do next, suggest one clear next action.",
+        "Reply directly to the user's latest message.",
+        "Be conversational and useful.",
+        "Do not summarize the workspace, mention next action, or restate schedule unless the user asks for it.",
         "Do not add a title or markdown unless it helps."
       ];
 
   return [
     `You are the MyAxis assistant for the ${workspaceLabel} workspace.`,
     style || "",
-    ...guidance,
-    summaryLines.length ? `Workspace context: ${summaryLines.join(" | ")}` : ""
+    ...guidance
   ]
     .filter(Boolean)
     .join(" ");
