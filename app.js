@@ -1422,6 +1422,7 @@ async function sendAssistantMessage(workspaceId, prompt) {
   });
   saveCaptureAssistant(workspaceId, assistantState);
   renderWorkspace(getWorkspace(appState.workspaceId));
+  focusCaptureAssistantInput(workspaceId);
 
   let reply = "";
   const backendSync = getBackendSyncConfig();
@@ -1448,6 +1449,7 @@ async function sendAssistantMessage(workspaceId, prompt) {
   });
   saveCaptureAssistant(workspaceId, nextState);
   renderWorkspace(getWorkspace(appState.workspaceId));
+  focusCaptureAssistantInput(workspaceId);
 }
 
 function renderCalendar(events) {
@@ -2950,6 +2952,19 @@ function scrollCaptureAssistantTranscriptToBottom() {
 
   requestAnimationFrame(() => {
     transcript.scrollTop = transcript.scrollHeight;
+  });
+}
+
+function focusCaptureAssistantInput(workspaceId) {
+  if (workspaceId !== appState.workspaceId) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    const input = document.getElementById("capture-assistant-input");
+    if (input) {
+      input.focus({ preventScroll: true });
+    }
   });
 }
 

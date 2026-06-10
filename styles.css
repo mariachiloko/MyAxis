@@ -471,14 +471,39 @@ h1 {
   position: relative;
   overflow: hidden;
   cursor: grab;
+  border: 1px solid color-mix(in oklab, var(--widget-accent, var(--accent)) 18%, var(--border));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 24px 70px rgba(0, 0, 0, 0.28),
+    0 0 26px color-mix(in oklab, var(--widget-accent, var(--accent)) 14%, transparent);
 }
 
 .widget-panel::before {
   content: "";
   position: absolute;
   inset: 0 0 auto;
-  height: 4px;
-  background: color-mix(in oklab, var(--widget-accent, var(--accent)) 72%, transparent);
+  height: 5px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--widget-accent, var(--accent)) 82%, white 4%),
+    color-mix(in oklab, var(--widget-accent, var(--accent)) 48%, transparent),
+    transparent
+  );
+  box-shadow:
+    0 0 16px color-mix(in oklab, var(--widget-accent, var(--accent)) 46%, transparent),
+    0 0 28px color-mix(in oklab, var(--widget-accent, var(--accent)) 24%, transparent);
+}
+
+.widget-panel::after {
+  content: "";
+  position: absolute;
+  inset: auto -8% -24% auto;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, color-mix(in oklab, var(--widget-accent, var(--accent)) 16%, transparent), transparent 68%);
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .widget-panel[data-widget-id="hero"] {
@@ -2076,6 +2101,7 @@ button {
 .capture-assistant {
   display: grid;
   gap: 12px;
+  position: relative;
 }
 
 .capture-assistant-toolbar {
@@ -2105,8 +2131,13 @@ button {
 .capture-assistant-message {
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: linear-gradient(180deg, var(--surface-soft), color-mix(in oklab, var(--surface-soft) 70%, var(--surface)));
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--surface-soft) 30%, transparent), color-mix(in oklab, var(--surface-soft) 76%, var(--surface))),
+    linear-gradient(135deg, color-mix(in oklab, var(--accent) 8%, transparent), transparent 60%);
   padding: 12px 14px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 12px 28px rgba(0, 0, 0, 0.12);
 }
 
 .capture-assistant-empty strong,
@@ -2131,19 +2162,26 @@ button {
 .capture-assistant-message--assistant {
   border-color: color-mix(in oklab, var(--accent) 32%, var(--border));
   background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--accent) 16%, transparent), transparent 45%),
-    linear-gradient(180deg, color-mix(in oklab, var(--accent) 10%, var(--surface-soft)), color-mix(in oklab, var(--surface-soft) 82%, var(--surface)));
+    radial-gradient(circle at top left, color-mix(in oklab, var(--accent) 28%, transparent), transparent 45%),
+    linear-gradient(180deg, color-mix(in oklab, var(--accent) 14%, var(--surface-soft)), color-mix(in oklab, var(--surface-soft) 82%, var(--surface)));
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent) inset,
+    0 0 24px color-mix(in oklab, var(--accent) 12%, transparent);
 }
 
 .capture-assistant-message--user {
   background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--accent-2) 10%, transparent), transparent 45%),
-    linear-gradient(180deg, color-mix(in oklab, var(--accent-2) 6%, var(--surface-soft)), color-mix(in oklab, var(--surface-soft) 82%, var(--surface)));
+    radial-gradient(circle at top left, color-mix(in oklab, var(--accent-2) 16%, transparent), transparent 45%),
+    linear-gradient(180deg, color-mix(in oklab, var(--accent-2) 8%, var(--surface-soft)), color-mix(in oklab, var(--surface-soft) 82%, var(--surface)));
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--accent-2) 10%, transparent) inset,
+    0 0 18px color-mix(in oklab, var(--accent-2) 8%, transparent);
 }
 
 .capture-assistant-message-meta {
   color: var(--muted);
   font-size: 0.84rem;
+  text-shadow: 0 0 12px color-mix(in oklab, var(--accent) 16%, transparent);
 }
 
 .capture-assistant-message-body {
@@ -2166,8 +2204,13 @@ button {
   border-radius: 18px;
   padding: 16px;
   color: var(--text);
-  background: var(--surface-soft);
+  background:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--accent) 14%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in oklab, var(--surface-soft) 72%, transparent), var(--surface-soft));
   font: inherit;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 0 20px color-mix(in oklab, var(--accent) 10%, transparent);
 }
 
 .capture-assistant-input::placeholder {
