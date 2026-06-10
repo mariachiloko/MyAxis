@@ -4238,6 +4238,13 @@ function clearSpotifyPlaylistViewState() {
   clearSpotifyPlaybackMonitorTimer();
 }
 
+function resetSpotifyAutoAdvanceState() {
+  clearSpotifyPlaylistAdvanceTimer();
+  clearSpotifyPlaybackMonitorTimer();
+  appState.spotifyExpectedTrackEndAt = 0;
+  appState.spotifyAutoAdvanceLock = false;
+}
+
 async function queueSpotifyRecommendations(workspaceId, seedTrackUri) {
   const seed = typeof seedTrackUri === "object" && seedTrackUri ? seedTrackUri : { uri: seedTrackUri };
   const trackUri = String(seed.uri || "").trim();
@@ -4524,17 +4531,19 @@ async function playSpotifyTrackUri(workspaceId, trackUri) {
     return;
   }
 
+  resetSpotifyAutoAdvanceState();
   await transferSpotifyPlayback(workspaceId, appState.spotifyPlayerDeviceId);
   await disableSpotifyPlaybackModes(workspaceId);
   await spotifyPlayerApiRequest(workspaceId, "/v1/me/player/play", {
     method: "PUT",
     body: { uris: [uri] }
   });
+  appState.spotifyCurrentTrackUri = uri;
   await new Promise((resolve) => window.setTimeout(resolve, 350));
   const currentState = await player.getCurrentState().catch(() => null);
   setSpotifyPlayerState(currentState);
-  const actualTrackUri = String(appState.spotifyPlayerState?.track?.uri || uri).trim();
-  appState.spotifyCurrentTrackUri = actualTrackUri;
+  const liveTrackUri = String(appState.spotifyPlayerState?.track?.uri || "").trim();
+  appState.spotifyCurrentTrackUri = liveTrackUri === uri ? liveTrackUri : uri;
   renderSpotify(getWorkspace(workspaceId));
 }
 
@@ -4954,12 +4963,10 @@ async function ensureSpotifyPlayer(workspaceId, interactive = false) {
             console.warn("Unable to extend Spotify queue.", error);
           });
         }
-      } else if (appState.spotifyExpectedTrackEndAt || appState.spotifyCurrentTrackUri) {
+      } else if (appState.spotifyExpectedTrackEndAt && appState.spotifyCurrentTrackUri) {
         scheduleSpotifyPlaybackAdvance(workspaceId, appState.spotifyCurrentTrackUri || currentTrackUri);
       } else {
-        clearSpotifyPlaylistAdvanceTimer();
-        clearSpotifyPlaybackMonitorTimer();
-        appState.spotifyAutoAdvanceLock = false;
+        resetSpotifyAutoAdvanceState();
       }
       renderSpotify(getWorkspace(workspaceId));
     });
@@ -5256,6 +5263,7 @@ async function playSpotifySearchItem(workspaceId, item) {
     return;
   }
   await prepareSpotifyPlaybackQueue(workspaceId, item || "");
+  resetSpotifyAutoAdvanceState();
   await transferSpotifyPlayback(workspaceId, appState.spotifyPlayerDeviceId);
   await disableSpotifyPlaybackModes(workspaceId);
   await playSpotifyTrackUri(workspaceId, item?.uri || "");
@@ -5274,9 +5282,11 @@ async function handleSpotifyAction(workspaceId, action) {
       await player.togglePlay();
       break;
     case "previous-track":
+      resetSpotifyAutoAdvanceState();
       await advanceSpotifyPlaybackQueue(workspaceId, -1);
       break;
     case "next-track":
+      resetSpotifyAutoAdvanceState();
       await advanceSpotifyPlaybackQueue(workspaceId, 1);
       break;
     case "connect":
