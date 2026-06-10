@@ -767,7 +767,7 @@ function renderSchedule(schedule, calendarEvents = []) {
                       <span class="tag-chip tag-chip--${escapeHtml(item.source === "calendar" || item.source === "google" ? calendarEventClass(item.payload.event.source || item.payload.event.type) : "schedule")}">${escapeHtml(item.source === "calendar" || item.source === "google" ? item.payload.event.sourceLabel || item.payload.event.type || "calendar" : "schedule")}</span>
                     </div>
                     <strong class="stack-title">${escapeHtml(item.title)}</strong>
-                    <p class="stack-detail">${escapeHtml(item.detail)}</p>
+                    ${item.detail ? `<p class="stack-detail">${escapeHtml(item.detail)}</p>` : ""}
                     <div class="calendar-event-actions">
                       ${
                         item.source === "schedule"
@@ -803,7 +803,7 @@ function renderSchedule(schedule, calendarEvents = []) {
                         <span class="tag-chip tag-chip--${escapeHtml(calendarEventClass(todoItem.source))}">${escapeHtml(todoItem.sourceLabel || "calendar")}</span>
                       </div>
                       <strong class="stack-title">${escapeHtml(todoItem.title)}</strong>
-                      <p class="stack-detail">${escapeHtml(todoItem.detail)}</p>
+                      ${todoItem.detail ? `<p class="stack-detail">${escapeHtml(todoItem.detail)}</p>` : ""}
                       <div class="calendar-event-actions">
                         <button class="mini-button" type="button" data-action="toggle-calendar-todo">${todoItem.completed ? "Undo" : "Check off"}</button>
                         ${
@@ -1728,7 +1728,7 @@ function renderCalendarEvents(dayEvents, compact = false, dayLabel = "") {
             <strong>${escapeHtml(event.title)}</strong>
             ${compact ? `<button class="mini-button" type="button" data-action="toggle-calendar-event">Expand</button>` : ""}
             <div class="calendar-event-body">
-              <p>${escapeHtml(event.detail)}</p>
+              ${event.detail ? `<p>${escapeHtml(event.detail)}</p>` : ""}
               <span class="tag-chip tag-chip--${calendarEventClass(event.source || event.type)}">${escapeHtml(event.sourceLabel || event.type || "calendar")}</span>
               <div class="calendar-event-actions">
                 ${
@@ -1848,8 +1848,8 @@ function renderKanban(workspace) {
                 return `
                 <article class="kanban-card ${subtasks.length ? "kanban-card--subtasks" : ""} ${allSubtasksDone ? "kanban-card--ready" : ""}" draggable="true" data-card-id="${escapeHtml(card.id)}" data-column-id="${escapeHtml(column.id)}">
                   <strong>${escapeHtml(card.title)}</strong>
-                  <p class="stack-detail">${escapeHtml(card.detail)}</p>
-                  <span class="tag-chip">${escapeHtml(card.tag)}</span>
+                  ${card.detail ? `<p class="stack-detail">${escapeHtml(card.detail)}</p>` : ""}
+                  ${card.tag ? `<span class="tag-chip">${escapeHtml(card.tag)}</span>` : `<span class="tag-chip">Task</span>`}
                   ${
                     subtasks.length
                       ? `
@@ -7196,12 +7196,12 @@ function handleTaskSubmit(event) {
   const payload = {
     title: taskFormTitleEl.value.trim(),
     detail: taskFormDetailEl.value.trim(),
-    tag: taskFormTagEl.value.trim(),
+    tag: taskFormTagEl.value.trim() || "Task",
     subtasks
   };
 
-  if (!payload.title || !payload.detail || !payload.tag) {
-    window.alert("Fill out the task title, detail, and tag before saving.");
+  if (!payload.title) {
+    window.alert("Fill out the task title before saving.");
     return;
   }
 
@@ -7444,13 +7444,13 @@ function normalizeScheduleEntries(entries, workspaceId, assignDefaultDays = fals
     .map((entry, index) => ({
       id: entry.id || `schedule-${slugify(entry.title || `item-${index + 1}`)}-${index + 1}`,
       day: normalizeScheduleDay(entry.day, assignDefaultDays ? DAY_ORDER[index % DAY_ORDER.length] : appState.scheduleDay),
-      time: normalizeTime(entry.time || "09:00"),
+      time: normalizeOptionalTime(entry.time),
       title: String(entry.title || "").trim(),
       detail: String(entry.detail || "").trim(),
       source: "schedule",
       workspaceId
     }))
-    .filter((entry) => entry.title && entry.detail);
+    .filter((entry) => entry.title);
 }
 
 function normalizeScheduleDay(day, fallbackDay = getStoredScheduleDay()) {
@@ -7464,7 +7464,7 @@ function fillScheduleForm(workspaceId, itemId, dayOverride = "", sourceDefaults 
 
   scheduleFormDayEl.value = dayOverride || item?.day || appState.scheduleDay || DAY_ORDER[0];
   scheduleFormItemIdEl.value = item?.id || "";
-  scheduleFormTimeEl.value = normalizeTime(item?.time || sourceDefaults?.time || "09:00");
+  scheduleFormTimeEl.value = normalizeOptionalTime(item?.time || sourceDefaults?.time || "");
   scheduleFormTitleEl.value = item?.title || sourceDefaults?.title || "";
   scheduleFormDetailEl.value = item?.detail || sourceDefaults?.detail || "";
   scheduleFormDeleteEl.disabled = !item;
@@ -7488,14 +7488,14 @@ function handleScheduleSubmit(event) {
   const entries = [...getScheduleState(workspace)];
   const payload = {
     day: scheduleFormDayEl.value,
-    time: normalizeTime(scheduleFormTimeEl.value),
+    time: normalizeOptionalTime(scheduleFormTimeEl.value),
     title: scheduleFormTitleEl.value.trim(),
     detail: scheduleFormDetailEl.value.trim(),
     source: "schedule"
   };
 
-  if (!payload.day || !payload.time || !payload.title || !payload.detail) {
-    window.alert("Fill out the day, time, title, and detail before saving.");
+  if (!payload.day || !payload.title) {
+    window.alert("Fill out the day and title before saving.");
     return;
   }
 
@@ -8263,7 +8263,7 @@ function fillCalendarForm(workspaceId, eventIndexValue, dayOverride = "") {
 
   calendarFormEventIndexEl.value = Number.isInteger(eventIndex) ? String(eventIndex) : "";
   calendarFormDayEl.value = dayOverride || event?.day || DAY_ORDER[0];
-  calendarFormTimeEl.value = normalizeTime(event?.time || "09:00");
+  calendarFormTimeEl.value = normalizeOptionalTime(event?.time || "");
   calendarFormTitleEl.value = event?.title || "";
   calendarFormDetailEl.value = event?.detail || "";
   calendarFormTypeEl.value = event?.type || "calendar";
@@ -8288,14 +8288,14 @@ function handleCalendarSubmit(event) {
   const events = Array.isArray(workspace.calendar) ? [...workspace.calendar] : [];
   const payload = {
     day: calendarFormDayEl.value,
-    time: normalizeTime(calendarFormTimeEl.value),
+    time: normalizeOptionalTime(calendarFormTimeEl.value),
     title: calendarFormTitleEl.value.trim(),
     detail: calendarFormDetailEl.value.trim(),
-    type: calendarFormTypeEl.value.trim()
+    type: calendarFormTypeEl.value.trim() || "calendar"
   };
 
-  if (!payload.title || !payload.detail || !payload.type) {
-    window.alert("Fill out the event title, detail, and type before saving.");
+  if (!payload.title) {
+    window.alert("Fill out the event title before saving.");
     return;
   }
 
@@ -8754,6 +8754,15 @@ function normalizeTime(value) {
   const hours = Math.min(23, Math.max(0, Number.parseInt(match[1], 10)));
   const minutes = Math.min(59, Math.max(0, Number.parseInt(match[2], 10)));
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function normalizeOptionalTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  return /^\d{1,2}:\d{2}$/.test(raw) ? normalizeTime(raw) : "";
 }
 
 function normalizeHexColor(value) {
