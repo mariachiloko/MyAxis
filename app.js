@@ -7240,6 +7240,7 @@ function handleTaskSubmit(event) {
   if (workspace.id === appState.workspaceId) {
     renderWorkspace(getWorkspace(appState.workspaceId));
   }
+  closeDrawer();
 }
 
 function deleteTaskFromEditor() {
@@ -7522,6 +7523,7 @@ function handleScheduleSubmit(event) {
   appState.editingTask = null;
   renderWorkspace(getWorkspace(appState.workspaceId));
   fillScheduleForm(workspaceId, "", scheduleFormDayEl.value || appState.scheduleDay);
+  closeDrawer();
 }
 
 function deleteScheduleFromEditor() {
@@ -8311,6 +8313,7 @@ function handleCalendarSubmit(event) {
   appState.editingEvent = null;
   renderWorkspace(getWorkspace(appState.workspaceId));
   fillCalendarForm(workspaceId, "");
+  closeDrawer();
 }
 
 function deleteCalendarFromEditor() {
@@ -8431,6 +8434,7 @@ function handleFlashcardSubmit(event) {
   flashcardFormDeleteEl.disabled = true;
   appState.editingFlashcard = null;
   renderWorkspace(getWorkspace(appState.workspaceId));
+  closeDrawer();
 }
 
 function handleStorySubmit(event) {
@@ -8510,6 +8514,7 @@ function deleteStoryFromEditor() {
   storyFormParagraphEl.value = "";
   renderWorkspace(getWorkspace(appState.workspaceId));
   fillStoryForm(workspaceId, "");
+  closeDrawer();
 }
 
 function handleWorkspaceSettingsSubmit(event) {
