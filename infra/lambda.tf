@@ -40,8 +40,13 @@ data "aws_iam_policy_document" "lambda_data" {
     resources = [
       aws_dynamodb_table.users.arn,
       aws_dynamodb_table.workspace_settings.arn,
+      aws_dynamodb_table.shared_workspace_settings.arn,
       aws_dynamodb_table.calendar_connections.arn,
-      aws_dynamodb_table.workspace_state.arn
+      aws_dynamodb_table.shared_calendar_connections.arn,
+      aws_dynamodb_table.workspace_state.arn,
+      aws_dynamodb_table.shared_workspace_state.arn,
+      aws_dynamodb_table.workspace_members.arn,
+      aws_dynamodb_table.workspace_invites.arn
     ]
   }
 
@@ -74,12 +79,17 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      APP_NAME                   = var.app_name
-      AI_MODEL_DEFAULT           = var.ai_model
-      USERS_TABLE                = aws_dynamodb_table.users.name
-      WORKSPACE_SETTINGS_TABLE   = aws_dynamodb_table.workspace_settings.name
-      CALENDAR_CONNECTIONS_TABLE = aws_dynamodb_table.calendar_connections.name
-      WORKSPACE_STATE_TABLE      = aws_dynamodb_table.workspace_state.name
+      APP_NAME                        = var.app_name
+      AI_MODEL_DEFAULT                = var.ai_model
+      USERS_TABLE                     = aws_dynamodb_table.users.name
+      WORKSPACE_SETTINGS_TABLE        = aws_dynamodb_table.workspace_settings.name
+      SHARED_WORKSPACE_SETTINGS_TABLE = aws_dynamodb_table.shared_workspace_settings.name
+      CALENDAR_CONNECTIONS_TABLE      = aws_dynamodb_table.calendar_connections.name
+      SHARED_CALENDAR_CONNECTIONS_TABLE = aws_dynamodb_table.shared_calendar_connections.name
+      WORKSPACE_STATE_TABLE           = aws_dynamodb_table.workspace_state.name
+      SHARED_WORKSPACE_STATE_TABLE    = aws_dynamodb_table.shared_workspace_state.name
+      WORKSPACE_MEMBERS_TABLE         = aws_dynamodb_table.workspace_members.name
+      WORKSPACE_INVITES_TABLE         = aws_dynamodb_table.workspace_invites.name
     }
   }
 }

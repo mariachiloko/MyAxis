@@ -7,6 +7,7 @@ const {
   PutCommand,
   QueryCommand
 } = require("@aws-sdk/lib-dynamodb");
+const crypto = require("crypto");
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrock = new BedrockRuntimeClient({});
@@ -27,8 +28,13 @@ const LOCAL_MOTIVATION_QUOTES = [
 const TABLES = {
   users: process.env.USERS_TABLE,
   workspaceSettings: process.env.WORKSPACE_SETTINGS_TABLE,
+  sharedWorkspaceSettings: process.env.SHARED_WORKSPACE_SETTINGS_TABLE,
   calendarConnections: process.env.CALENDAR_CONNECTIONS_TABLE,
-  workspaceState: process.env.WORKSPACE_STATE_TABLE
+  sharedCalendarConnections: process.env.SHARED_CALENDAR_CONNECTIONS_TABLE,
+  workspaceState: process.env.WORKSPACE_STATE_TABLE,
+  sharedWorkspaceState: process.env.SHARED_WORKSPACE_STATE_TABLE,
+  workspaceMembers: process.env.WORKSPACE_MEMBERS_TABLE,
+  workspaceInvites: process.env.WORKSPACE_INVITES_TABLE
 };
 
 exports.handler = async (event) => {
@@ -63,7 +69,7 @@ exports.handler = async (event) => {
       return await handleAI(user, event);
     }
 
-    const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)\/(settings|calendar-connection|state)$/);
+    const workspaceMatch = path.match(/^\/v1\/workspaces\/([^/]+)\/(settings|calendar-connection|state|sharing|members|invites)$/);
     if (workspaceMatch) {
       const workspaceId = decodeURIComponent(workspaceMatch[1]);
       const resource = workspaceMatch[2];
@@ -79,6 +85,23 @@ exports.handler = async (event) => {
       if (resource === "state") {
         return await handleWorkspaceState(method, user, workspaceId, event);
       }
+
+      if (resource === "sharing") {
+        return await handleWorkspaceSharing(method, user, workspaceId, event);
+      }
+
+      if (resource === "members") {
+        return await handleWorkspaceMembers(method, user, workspaceId, event);
+      }
+
+      if (resource === "invites") {
+        return await handleWorkspaceInvites(method, user, workspaceId, event);
+      }
+    }
+
+    const inviteMatch = path.match(/^\/v1\/invites\/([^/]+)\/accept$/);
+    if (method === "POST" && inviteMatch) {
+      return await handleInviteAcceptance(user, decodeURIComponent(inviteMatch[1]), event);
     }
 
     return jsonResponse(404, {
@@ -142,7 +165,7 @@ async function touchUserRecord(user) {
 }
 
 async function getMePayload(user) {
-  const [userRecord, settingsItems, connectionItems, stateItems] = await Promise.all([
+  const [userRecord, settingsItems, connectionItems, stateItems, memberItems, inviteItems] = await Promise.all([
     ddb.send(
       new GetCommand({
         TableName: TABLES.users,
@@ -151,7 +174,16 @@ async function getMePayload(user) {
     ),
     queryByUser(TABLES.workspaceSettings, user.userId),
     queryByUser(TABLES.calendarConnections, user.userId),
-    queryByUser(TABLES.workspaceState, user.userId)
+    queryByUser(TABLES.workspaceState, user.userId),
+    queryWorkspaceMembershipsByUser(user.userId),
+    queryInvitesByEmail(user.email)
+  ]);
+
+  const sharedWorkspaceIds = [...new Set(memberItems.map((item) => String(item.workspaceId || "").trim()).filter(Boolean))];
+  const [sharedSettingsItems, sharedConnectionItems, sharedStateItems] = await Promise.all([
+    Promise.all(sharedWorkspaceIds.map((workspaceId) => getItemByWorkspaceId(TABLES.sharedWorkspaceSettings, workspaceId))),
+    Promise.all(sharedWorkspaceIds.map((workspaceId) => getItemByWorkspaceId(TABLES.sharedCalendarConnections, workspaceId))),
+    Promise.all(sharedWorkspaceIds.map((workspaceId) => getItemByWorkspaceId(TABLES.sharedWorkspaceState, workspaceId)))
   ]);
 
   return {
@@ -161,9 +193,203 @@ async function getMePayload(user) {
       email: user.email,
       displayName: user.displayName
     },
-    workspaceSettings: settingsItems,
-    calendarConnections: connectionItems,
-    workspaceStates: stateItems
+    workspaceSettings: [...settingsItems, ...sharedSettingsItems.filter(Boolean).map((item) => ({
+      userId: user.userId,
+      workspaceId: item.workspaceId,
+      settings: item.workspace || null,
+      updatedAt: item.updatedAt || null,
+      createdAt: item.createdAt || null
+    }))],
+    calendarConnections: [...connectionItems, ...sharedConnectionItems.filter(Boolean).map((item) => ({
+      userId: user.userId,
+      workspaceId: item.workspaceId,
+      connection: item.connection || null,
+      updatedAt: item.updatedAt || null,
+      createdAt: item.createdAt || null
+    }))],
+    workspaceStates: [...stateItems, ...sharedStateItems.filter(Boolean).map((item) => ({
+      userId: user.userId,
+      workspaceId: item.workspaceId,
+      workspace: item.workspace || null,
+      state: item.state || null,
+      updatedAt: item.updatedAt || null,
+      createdAt: item.createdAt || null
+    }))],
+    workspaceMemberships: memberItems,
+    workspaceInvites: inviteItems
+  };
+}
+
+async function queryWorkspaceMembershipsByUser(userId) {
+  return queryByPartitionKey(TABLES.workspaceMembers, "userId", userId);
+}
+
+async function queryWorkspaceMembersByWorkspace(workspaceId) {
+  return queryByIndex(TABLES.workspaceMembers, "workspaceId-index", "workspaceId", workspaceId);
+}
+
+async function queryInvitesByEmail(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) {
+    return [];
+  }
+
+  return queryByIndex(TABLES.workspaceInvites, "invitedEmail-index", "invitedEmail", normalizedEmail);
+}
+
+async function getItemByWorkspaceId(tableName, workspaceId) {
+  const response = await ddb.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: { workspaceId }
+    })
+  );
+  return response.Item || null;
+}
+
+async function getSharedWorkspaceSettingsRecord(workspaceId) {
+  return getItemByWorkspaceId(TABLES.sharedWorkspaceSettings, workspaceId);
+}
+
+async function getSharedWorkspaceStateRecord(workspaceId) {
+  return getItemByWorkspaceId(TABLES.sharedWorkspaceState, workspaceId);
+}
+
+async function getSharedCalendarConnectionRecord(workspaceId) {
+  return getItemByWorkspaceId(TABLES.sharedCalendarConnections, workspaceId);
+}
+
+async function isWorkspaceMember(userId, workspaceId) {
+  const response = await ddb.send(
+    new GetCommand({
+      TableName: TABLES.workspaceMembers,
+      Key: {
+        userId,
+        workspaceId
+      }
+    })
+  );
+  return Boolean(response.Item);
+}
+
+async function isSharedWorkspaceAccessible(userId, workspaceId) {
+  const settings = await getSharedWorkspaceSettingsRecord(workspaceId);
+  if (!settings) {
+    return false;
+  }
+
+  if (settings.ownerUserId === userId) {
+    return true;
+  }
+
+  return isWorkspaceMember(userId, workspaceId);
+}
+
+function normalizeWorkspaceSharingBody(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    enabled: Boolean(source.enabled),
+    inviteNote: String(source.inviteNote || "").trim(),
+    members: normalizeInviteEmailList(source.members || source.invitedEmails || source.emails || [])
+  };
+}
+
+function normalizeInviteEmailList(value) {
+  const list = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(/[\n,]/)
+        .map((item) => item.trim());
+  return [...new Set(
+    list
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item))
+  )];
+}
+
+function generateInviteCode(workspaceId, invitedEmail) {
+  return `inv-${workspaceId}-${slugify(invitedEmail || "invite")}-${crypto.randomBytes(6).toString("hex")}`;
+}
+
+async function ensureWorkspaceOwnerMembership(workspaceId, user) {
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLES.workspaceMembers,
+      Item: {
+        userId: user.userId,
+        workspaceId,
+        role: "owner",
+        email: user.email || "",
+        displayName: user.displayName || "",
+        addedByUserId: user.userId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    })
+  );
+}
+
+async function upsertSharedWorkspaceSettings(workspaceId, user, workspace, sharing) {
+  const now = new Date().toISOString();
+  const existing = await getSharedWorkspaceSettingsRecord(workspaceId);
+  const nextWorkspace = {
+    id: workspaceId,
+    label: String(workspace.label || workspaceId).trim(),
+    title: String(workspace.title || "").trim(),
+    description: String(workspace.description || "").trim(),
+    boardType: getWorkspaceBoardType(workspace),
+    accent: String(workspace.accent || defaultConfig.workspaces[0].accent),
+    accent2: String(workspace.accent2 || defaultConfig.workspaces[0].accent2),
+    sharing: {
+      enabled: Boolean(sharing.enabled),
+      inviteNote: String(sharing.inviteNote || "").trim(),
+      members: normalizeInviteEmailList(sharing.members || [])
+    }
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLES.sharedWorkspaceSettings,
+      Item: {
+        workspaceId,
+        ownerUserId: existing?.ownerUserId || user.userId,
+        workspace: nextWorkspace,
+        updatedAt: now,
+        createdAt: existing?.createdAt || now
+      }
+    })
+  );
+
+  if (sharing.enabled) {
+    await ensureWorkspaceOwnerMembership(workspaceId, user);
+  }
+
+  return nextWorkspace;
+}
+
+async function getWorkspaceStorageScope(user, workspaceId) {
+  const sharedSettings = await getSharedWorkspaceSettingsRecord(workspaceId);
+  if (sharedSettings) {
+    const accessible = await isSharedWorkspaceAccessible(user.userId, workspaceId);
+    return {
+      shared: true,
+      accessible,
+      settingsTable: TABLES.sharedWorkspaceSettings,
+      stateTable: TABLES.sharedWorkspaceState,
+      connectionTable: TABLES.sharedCalendarConnections,
+      ownerUserId: sharedSettings.ownerUserId || "",
+      settings: sharedSettings.workspace || null
+    };
+  }
+
+  return {
+    shared: false,
+    accessible: true,
+    settingsTable: TABLES.workspaceSettings,
+    stateTable: TABLES.workspaceState,
+    connectionTable: TABLES.calendarConnections,
+    ownerUserId: user.userId,
+    settings: null
   };
 }
 
@@ -389,12 +615,18 @@ function extractBedrockText(response) {
 }
 
 async function handleWorkspaceSettings(method, user, workspaceId, event) {
+  const scope = await getWorkspaceStorageScope(user, workspaceId);
   if (method === "GET") {
-    const record = await getItem(TABLES.workspaceSettings, user.userId, workspaceId);
+    if (!scope.accessible) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+    const record = scope.shared
+      ? await getItemByWorkspaceId(TABLES.sharedWorkspaceSettings, workspaceId)
+      : await getItem(TABLES.workspaceSettings, user.userId, workspaceId);
     return jsonResponse(200, {
       ok: true,
       workspaceId,
-      settings: record?.settings || null,
+      settings: scope.shared ? record?.workspace || null : record?.settings || null,
       updatedAt: record?.updatedAt || null
     });
   }
@@ -402,7 +634,33 @@ async function handleWorkspaceSettings(method, user, workspaceId, event) {
   if (method === "PUT" || method === "POST") {
     const body = parseJsonBody(event);
     const settings = sanitizeWorkspaceSettings(body);
+    const sharing = normalizeWorkspaceSharingBody(body.sharing);
     const now = new Date().toISOString();
+
+    const shouldUseShared = Boolean(sharing.enabled) || scope.shared;
+    if (scope.shared && scope.ownerUserId !== user.userId) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+    if (shouldUseShared) {
+      const workspace = {
+        id: workspaceId,
+        label: settings.label || workspaceId,
+        title: settings.title || "",
+        description: settings.description || "",
+        boardType: settings.boardType || "kanban",
+        accent: settings.accent || "",
+        accent2: settings.accent2 || "",
+        sharing
+      };
+
+      await upsertSharedWorkspaceSettings(workspaceId, user, workspace, sharing);
+      return jsonResponse(200, {
+        ok: true,
+        workspaceId,
+        settings: workspace,
+        updatedAt: now
+      });
+    }
 
     await ddb.send(
       new PutCommand({
@@ -426,6 +684,19 @@ async function handleWorkspaceSettings(method, user, workspaceId, event) {
   }
 
   if (method === "DELETE") {
+    if (scope.shared) {
+      if (scope.ownerUserId !== user.userId) {
+        return jsonResponse(403, { ok: false, error: "Forbidden" });
+      }
+      await ddb.send(
+        new DeleteCommand({
+          TableName: TABLES.sharedWorkspaceSettings,
+          Key: { workspaceId }
+        })
+      );
+      return jsonResponse(200, { ok: true, workspaceId, deleted: true });
+    }
+
     await ddb.send(
       new DeleteCommand({
         TableName: TABLES.workspaceSettings,
@@ -447,8 +718,14 @@ async function handleWorkspaceSettings(method, user, workspaceId, event) {
 }
 
 async function handleCalendarConnection(method, user, workspaceId, event) {
+  const scope = await getWorkspaceStorageScope(user, workspaceId);
   if (method === "GET") {
-    const record = await getItem(TABLES.calendarConnections, user.userId, workspaceId);
+    if (!scope.accessible) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+    const record = scope.shared
+      ? await getItemByWorkspaceId(TABLES.sharedCalendarConnections, workspaceId)
+      : await getItem(TABLES.calendarConnections, user.userId, workspaceId);
     return jsonResponse(200, {
       ok: true,
       workspaceId,
@@ -461,6 +738,27 @@ async function handleCalendarConnection(method, user, workspaceId, event) {
     const body = parseJsonBody(event);
     const connection = sanitizeCalendarConnection(body);
     const now = new Date().toISOString();
+
+    if (scope.shared) {
+      await ddb.send(
+        new PutCommand({
+          TableName: TABLES.sharedCalendarConnections,
+          Item: {
+            workspaceId,
+            connection,
+            updatedAt: now,
+            createdAt: (await getItemByWorkspaceId(TABLES.sharedCalendarConnections, workspaceId))?.createdAt || now
+          }
+        })
+      );
+
+      return jsonResponse(200, {
+        ok: true,
+        workspaceId,
+        connection,
+        updatedAt: now
+      });
+    }
 
     await ddb.send(
       new PutCommand({
@@ -484,6 +782,19 @@ async function handleCalendarConnection(method, user, workspaceId, event) {
   }
 
   if (method === "DELETE") {
+    if (scope.shared) {
+      if (scope.ownerUserId !== user.userId) {
+        return jsonResponse(403, { ok: false, error: "Forbidden" });
+      }
+      await ddb.send(
+        new DeleteCommand({
+          TableName: TABLES.sharedCalendarConnections,
+          Key: { workspaceId }
+        })
+      );
+      return jsonResponse(200, { ok: true, workspaceId, deleted: true });
+    }
+
     await ddb.send(
       new DeleteCommand({
         TableName: TABLES.calendarConnections,
@@ -505,8 +816,14 @@ async function handleCalendarConnection(method, user, workspaceId, event) {
 }
 
 async function handleWorkspaceState(method, user, workspaceId, event) {
+  const scope = await getWorkspaceStorageScope(user, workspaceId);
   if (method === "GET") {
-    const record = await getItem(TABLES.workspaceState, user.userId, workspaceId);
+    if (!scope.accessible) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+    const record = scope.shared
+      ? await getItemByWorkspaceId(TABLES.sharedWorkspaceState, workspaceId)
+      : await getItem(TABLES.workspaceState, user.userId, workspaceId);
     return jsonResponse(200, {
       ok: true,
       workspaceId,
@@ -521,6 +838,35 @@ async function handleWorkspaceState(method, user, workspaceId, event) {
     const nextWorkspace = sanitizeWorkspaceObject(body.workspace);
     const nextState = sanitizeWorkspaceLocalState(body.state);
     const now = new Date().toISOString();
+
+    if (scope.shared) {
+      const existingWorkspace = await getSharedWorkspaceSettingsRecord(workspaceId);
+      const workspace = {
+        ...(existingWorkspace?.workspace || {}),
+        ...nextWorkspace,
+        id: workspaceId
+      };
+      await ddb.send(
+        new PutCommand({
+          TableName: TABLES.sharedWorkspaceState,
+          Item: {
+            workspaceId,
+            workspace: Object.keys(workspace).length ? workspace : null,
+            state: Object.keys(nextState).length ? nextState : null,
+            updatedAt: now,
+            createdAt: (await getItemByWorkspaceId(TABLES.sharedWorkspaceState, workspaceId))?.createdAt || now
+          }
+        })
+      );
+
+      return jsonResponse(200, {
+        ok: true,
+        workspaceId,
+        workspace: Object.keys(workspace).length ? workspace : null,
+        state: Object.keys(nextState).length ? nextState : null,
+        updatedAt: now
+      });
+    }
 
     await ddb.send(
       new PutCommand({
@@ -546,6 +892,19 @@ async function handleWorkspaceState(method, user, workspaceId, event) {
   }
 
   if (method === "DELETE") {
+    if (scope.shared) {
+      if (scope.ownerUserId !== user.userId) {
+        return jsonResponse(403, { ok: false, error: "Forbidden" });
+      }
+      await ddb.send(
+        new DeleteCommand({
+          TableName: TABLES.sharedWorkspaceState,
+          Key: { workspaceId }
+        })
+      );
+      return jsonResponse(200, { ok: true, workspaceId, deleted: true });
+    }
+
     await ddb.send(
       new DeleteCommand({
         TableName: TABLES.workspaceState,
@@ -566,6 +925,226 @@ async function handleWorkspaceState(method, user, workspaceId, event) {
   return methodNotAllowed(["GET", "PUT", "POST", "DELETE"]);
 }
 
+async function handleWorkspaceSharing(method, user, workspaceId, event) {
+  const scope = await getWorkspaceStorageScope(user, workspaceId);
+  if (method === "GET") {
+    if (!scope.accessible) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+
+    const settings = scope.shared
+      ? await getItemByWorkspaceId(TABLES.sharedWorkspaceSettings, workspaceId)
+      : await getItem(TABLES.workspaceSettings, user.userId, workspaceId);
+    const members = await queryWorkspaceMembersByWorkspace(workspaceId);
+    const invites = await queryByIndex(TABLES.workspaceInvites, "workspaceId-index", "workspaceId", workspaceId);
+    return jsonResponse(200, {
+      ok: true,
+      workspaceId,
+      sharing: settings?.workspace?.sharing || { enabled: false, inviteNote: "" },
+      ownerUserId: settings?.ownerUserId || user.userId,
+      members,
+      invites
+    });
+  }
+
+  if (method === "PUT" || method === "POST") {
+    const body = parseJsonBody(event);
+    const sharing = normalizeWorkspaceSharingBody(body.sharing);
+    const workspace = sanitizeWorkspaceObject(body.workspace || {});
+    if (scope.shared && scope.ownerUserId !== user.userId) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+    const targetWorkspace = {
+      id: workspaceId,
+      label: String(workspace.label || body.label || workspaceId).trim(),
+      title: String(workspace.title || body.title || "").trim(),
+      description: String(workspace.description || body.description || "").trim(),
+      boardType: getWorkspaceBoardType({ boardType: workspace.boardType || body.boardType || "kanban" }),
+      accent: String(workspace.accent || body.accent || defaultConfig.workspaces[0].accent),
+      accent2: String(workspace.accent2 || body.accent2 || defaultConfig.workspaces[0].accent2),
+      sharing
+    };
+
+    await upsertSharedWorkspaceSettings(workspaceId, user, targetWorkspace, sharing);
+    return jsonResponse(200, {
+      ok: true,
+      workspaceId,
+      sharing,
+      workspace: targetWorkspace
+    });
+  }
+
+  if (method === "DELETE") {
+    if (scope.ownerUserId !== user.userId) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+
+    const invites = await queryByIndex(TABLES.workspaceInvites, "workspaceId-index", "workspaceId", workspaceId);
+    const members = await queryWorkspaceMembersByWorkspace(workspaceId);
+    await Promise.all([
+      ddb.send(new DeleteCommand({ TableName: TABLES.sharedWorkspaceSettings, Key: { workspaceId } })).catch(() => null),
+      ddb.send(new DeleteCommand({ TableName: TABLES.sharedWorkspaceState, Key: { workspaceId } })).catch(() => null),
+      ddb.send(new DeleteCommand({ TableName: TABLES.sharedCalendarConnections, Key: { workspaceId } })).catch(() => null),
+      Promise.all(invites.map((invite) => ddb.send(new DeleteCommand({
+        TableName: TABLES.workspaceInvites,
+        Key: { inviteCode: invite.inviteCode }
+      })))),
+      Promise.all(members.map((member) => ddb.send(new DeleteCommand({
+        TableName: TABLES.workspaceMembers,
+        Key: { userId: member.userId, workspaceId: member.workspaceId }
+      }))))
+    ]);
+
+    return jsonResponse(200, { ok: true, workspaceId, deleted: true });
+  }
+
+  return methodNotAllowed(["GET", "PUT", "POST", "DELETE"]);
+}
+
+async function handleWorkspaceMembers(method, user, workspaceId) {
+  const scope = await getWorkspaceStorageScope(user, workspaceId);
+  if (!scope.accessible) {
+    return jsonResponse(403, { ok: false, error: "Forbidden" });
+  }
+
+  if (method === "GET") {
+    const members = await queryWorkspaceMembersByWorkspace(workspaceId);
+    return jsonResponse(200, { ok: true, workspaceId, members });
+  }
+
+  if (method === "DELETE") {
+    if (scope.ownerUserId !== user.userId) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+    const members = await queryWorkspaceMembersByWorkspace(workspaceId);
+    await Promise.all(members.map((member) => ddb.send(new DeleteCommand({
+      TableName: TABLES.workspaceMembers,
+      Key: {
+        userId: member.userId,
+        workspaceId: member.workspaceId
+      }
+    }))));
+    return jsonResponse(200, { ok: true, workspaceId, deleted: true });
+  }
+
+  return methodNotAllowed(["GET", "DELETE"]);
+}
+
+async function handleWorkspaceInvites(method, user, workspaceId, event) {
+  const scope = await getWorkspaceStorageScope(user, workspaceId);
+  if (!scope.accessible) {
+    return jsonResponse(403, { ok: false, error: "Forbidden" });
+  }
+
+  if (method === "GET") {
+    const invites = await queryByIndex(TABLES.workspaceInvites, "workspaceId-index", "workspaceId", workspaceId);
+    return jsonResponse(200, { ok: true, workspaceId, invites });
+  }
+
+  if (method === "POST") {
+    if (!scope.shared) {
+      return jsonResponse(409, { ok: false, error: "Enable sharing first." });
+    }
+
+    if (scope.ownerUserId !== user.userId) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" });
+    }
+
+    const body = parseJsonBody(event);
+    const emails = normalizeInviteEmailList(body.emails || body.invitedEmails || body.email);
+    const role = String(body.role || "member").trim() === "owner" ? "owner" : "member";
+    const note = String(body.note || "").trim();
+    const now = new Date().toISOString();
+
+    const invites = [];
+    for (const invitedEmail of emails) {
+      const inviteCode = generateInviteCode(workspaceId, invitedEmail);
+      const invite = {
+        inviteCode,
+        workspaceId,
+        invitedEmail,
+        role,
+        note,
+        createdByUserId: user.userId,
+        createdByEmail: user.email || "",
+        status: "pending",
+        createdAt: now,
+        updatedAt: now
+      };
+      await ddb.send(new PutCommand({
+        TableName: TABLES.workspaceInvites,
+        Item: invite
+      }));
+      invites.push(invite);
+    }
+
+    return jsonResponse(200, {
+      ok: true,
+      workspaceId,
+      invites
+    });
+  }
+
+  return methodNotAllowed(["GET", "POST"]);
+}
+
+async function handleInviteAcceptance(user, inviteCode) {
+  const inviteResponse = await ddb.send(
+    new GetCommand({
+      TableName: TABLES.workspaceInvites,
+      Key: { inviteCode }
+    })
+  );
+  const invite = inviteResponse.Item;
+  if (!invite) {
+    return jsonResponse(404, { ok: false, error: "Invite not found" });
+  }
+
+  if (invite.status === "accepted") {
+    return jsonResponse(200, { ok: true, accepted: true, workspaceId: invite.workspaceId });
+  }
+
+  if (invite.invitedEmail && user.email && String(invite.invitedEmail).toLowerCase() !== String(user.email).toLowerCase()) {
+    return jsonResponse(403, { ok: false, error: "This invite was sent to a different email address." });
+  }
+
+  const now = new Date().toISOString();
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLES.workspaceMembers,
+      Item: {
+        userId: user.userId,
+        workspaceId: invite.workspaceId,
+        role: invite.role || "member",
+        email: user.email || invite.invitedEmail || "",
+        displayName: user.displayName || "",
+        addedByUserId: invite.createdByUserId || user.userId,
+        createdAt: invite.createdAt || now,
+        updatedAt: now
+      }
+    })
+  );
+
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLES.workspaceInvites,
+      Item: {
+        ...invite,
+        status: "accepted",
+        acceptedAt: now,
+        acceptedByUserId: user.userId,
+        updatedAt: now
+      }
+    })
+  );
+
+  return jsonResponse(200, {
+    ok: true,
+    accepted: true,
+    workspaceId: invite.workspaceId
+  });
+}
+
 async function getItem(tableName, userId, workspaceId) {
   const response = await ddb.send(
     new GetCommand({
@@ -584,6 +1163,41 @@ async function queryByUser(tableName, userId) {
       KeyConditionExpression: "userId = :userId",
       ExpressionAttributeValues: {
         ":userId": userId
+      }
+    })
+  );
+
+  return response.Items || [];
+}
+
+async function queryByPartitionKey(tableName, keyName, keyValue) {
+  const response = await ddb.send(
+    new QueryCommand({
+      TableName: tableName,
+      KeyConditionExpression: "#key = :keyValue",
+      ExpressionAttributeNames: {
+        "#key": keyName
+      },
+      ExpressionAttributeValues: {
+        ":keyValue": keyValue
+      }
+    })
+  );
+
+  return response.Items || [];
+}
+
+async function queryByIndex(tableName, indexName, keyName, keyValue) {
+  const response = await ddb.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: indexName,
+      KeyConditionExpression: "#key = :keyValue",
+      ExpressionAttributeNames: {
+        "#key": keyName
+      },
+      ExpressionAttributeValues: {
+        ":keyValue": keyValue
       }
     })
   );

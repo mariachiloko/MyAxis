@@ -235,6 +235,11 @@ const workspaceSettingsTitleEl = document.getElementById("workspace-settings-tit
 const workspaceSettingsDescriptionEl = document.getElementById("workspace-settings-description");
 const workspaceSettingsAccentEl = document.getElementById("workspace-settings-accent");
 const workspaceSettingsAccent2El = document.getElementById("workspace-settings-accent2");
+const workspaceSettingsSharedEl = document.getElementById("workspace-settings-shared");
+const workspaceSettingsMembersEl = document.getElementById("workspace-settings-members");
+const workspaceSettingsShareNoteEl = document.getElementById("workspace-settings-share-note");
+const workspaceSettingsInviteLinksEl = document.getElementById("workspace-settings-invite-links");
+const workspaceSettingsCreateInvitesEl = document.getElementById("workspace-settings-create-invites");
 const workspaceSettingsDefaultEl = document.getElementById("workspace-settings-default");
 const workspaceSettingsResetEl = document.getElementById("workspace-settings-reset");
 const workspaceSettingsDeleteEl = document.getElementById("workspace-settings-delete");
@@ -245,6 +250,8 @@ const workspaceCreateDescriptionEl = document.getElementById("workspace-create-d
 const workspaceCreateBoardTypeEl = document.getElementById("workspace-create-board-type");
 const workspaceCreateAccentEl = document.getElementById("workspace-create-accent");
 const workspaceCreateAccent2El = document.getElementById("workspace-create-accent2");
+const workspaceCreateSharedEl = document.getElementById("workspace-create-shared");
+const workspaceCreateMembersEl = document.getElementById("workspace-create-members");
 const workspaceCreateWidgetListEl = document.getElementById("workspace-create-widget-list");
 const workspaceCreateSubmitEl = document.getElementById("workspace-create-submit");
 const workspaceCreateCountEl = document.getElementById("workspace-create-count");
@@ -341,10 +348,34 @@ async function bootstrap() {
   handleSpotifyRedirect().catch((error) => {
     console.warn("Unable to complete Spotify login.", error);
   });
-  hydrateBackendAccountState().catch((error) => {
+  await hydrateBackendAccountState().catch((error) => {
     console.warn("Unable to hydrate backend state.", error);
   });
+  await processWorkspaceInviteFromUrl().catch((error) => {
+    console.warn("Unable to process workspace invite.", error);
+  });
   startSpotifyPlaybackTicker();
+}
+
+async function processWorkspaceInviteFromUrl() {
+  const inviteCode = new URL(window.location.href).searchParams.get("invite");
+  if (!inviteCode) {
+    return;
+  }
+
+  const payload = await backendRequest(`/v1/invites/${encodeURIComponent(inviteCode)}/accept`, {
+    method: "POST"
+  });
+  if (!payload?.ok || !payload.accepted) {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.delete("invite");
+  window.history.replaceState({}, "", url.toString());
+  await hydrateBackendAccountState().catch(() => null);
+  renderTabs();
+  renderWorkspace(getWorkspace(appState.workspaceId));
 }
 
 function startSpotifyPlaybackTicker() {
@@ -481,6 +512,7 @@ function wireDrawerControls() {
   workspaceSettingsFormEl.addEventListener("submit", handleWorkspaceSettingsSubmit);
   workspaceSettingsResetEl.addEventListener("click", resetWorkspaceOverrides);
   workspaceSettingsDeleteEl.addEventListener("click", handleWorkspaceDeleteClick);
+  workspaceSettingsCreateInvitesEl?.addEventListener("click", handleWorkspaceInviteCreateClick);
   workspaceCreateFormEl?.addEventListener("submit", handleWorkspaceCreateSubmit);
   workspaceCreateFormEl?.addEventListener("input", syncWorkspaceCreateForm);
   workspaceCreateFormEl?.addEventListener("change", syncWorkspaceCreateForm);
@@ -620,7 +652,7 @@ function renderTabs() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "workspace-tab";
-    button.textContent = item.label;
+    button.innerHTML = `${escapeHtml(item.label)}${item.sharing?.enabled ? ' <span class="workspace-tab-badge">Shared</span>' : ""}`;
     button.setAttribute("aria-pressed", String(item.id === activeWorkspaceId));
     button.addEventListener("click", () => {
       localStorage.setItem(STORAGE_KEYS.selectedWorkspace, item.id);
@@ -3879,6 +3911,12 @@ function seedWorkspaceCreateForm() {
   if (workspaceCreateAccent2El) {
     workspaceCreateAccent2El.value = normalizeHexColor(templateWorkspace.accent2 || defaultConfig.workspaces[0].accent2);
   }
+  if (workspaceCreateSharedEl) {
+    workspaceCreateSharedEl.checked = Boolean(templateWorkspace.sharing?.enabled);
+  }
+  if (workspaceCreateMembersEl) {
+    workspaceCreateMembersEl.value = serializeWorkspaceMemberList(templateWorkspace.sharing?.members || []);
+  }
   renderWorkspaceCreateWidgetList();
   appState.workspaceCreateInitialized = true;
 }
@@ -4009,6 +4047,11 @@ function getWorkspaceTemplate(workspaceId, label, title, description, accent, ac
     boardType,
     accent,
     accent2,
+    sharing: {
+      enabled: false,
+      members: [],
+      inviteNote: ""
+    },
     stats: [],
     schedule: [],
     kanban: [
@@ -4039,7 +4082,9 @@ async function deleteWorkspaceBackendState(workspaceId) {
   await Promise.allSettled([
     backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/settings`, { method: "DELETE" }),
     backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/state`, { method: "DELETE" }),
-    backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/calendar-connection`, { method: "DELETE" })
+    backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/calendar-connection`, { method: "DELETE" }),
+    backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/sharing`, { method: "DELETE" }),
+    backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members`, { method: "DELETE" })
   ]);
 }
 
@@ -4180,6 +4225,18 @@ function fillWorkspaceSettingsForm(workspaceId) {
   workspaceSettingsDescriptionEl.value = workspace.description || "";
   workspaceSettingsAccentEl.value = normalizeHexColor(workspace.accent || defaultConfig.workspaces[0].accent);
   workspaceSettingsAccent2El.value = normalizeHexColor(workspace.accent2 || defaultConfig.workspaces[0].accent2);
+  if (workspaceSettingsSharedEl) {
+    workspaceSettingsSharedEl.checked = Boolean(workspace.sharing?.enabled);
+  }
+  if (workspaceSettingsMembersEl) {
+    workspaceSettingsMembersEl.value = serializeWorkspaceMemberList(workspace.sharing?.members || []);
+  }
+  if (workspaceSettingsShareNoteEl) {
+    workspaceSettingsShareNoteEl.value = String(workspace.sharing?.inviteNote || "");
+  }
+  if (workspaceSettingsInviteLinksEl) {
+    workspaceSettingsInviteLinksEl.value = "";
+  }
   if (workspaceSettingsDeleteEl) {
     const builtIn = isBuiltInWorkspace(workspace.id);
     workspaceSettingsDeleteEl.disabled = builtIn;
@@ -4188,6 +4245,48 @@ function fillWorkspaceSettingsForm(workspaceId) {
   syncHomeCalendarSection(workspace);
   fillWeatherForm(workspace.id);
   fillSpotifyForm(workspace.id);
+}
+
+async function handleWorkspaceInviteCreateClick() {
+  const workspaceId = appState.workspaceId;
+  const emails = normalizeWorkspaceMemberList(workspaceSettingsMembersEl?.value || "");
+  if (!emails.length) {
+    window.alert("Add at least one invite email first.");
+    return;
+  }
+
+  try {
+    const links = await createWorkspaceInviteLinks(workspaceId, emails, String(workspaceSettingsShareNoteEl?.value || "").trim());
+    if (workspaceSettingsInviteLinksEl) {
+      workspaceSettingsInviteLinksEl.value = links.join("\n");
+    }
+    if (links.length) {
+      try {
+        await navigator.clipboard.writeText(links.join("\n"));
+        window.alert("Invite links copied to clipboard.");
+      } catch {
+        window.alert("Invite links were generated.");
+      }
+    }
+  } catch (error) {
+    console.warn("Unable to create invites.", error);
+    window.alert("Unable to create invite links right now.");
+  }
+}
+
+async function createWorkspaceInviteLinks(workspaceId, emails, note = "") {
+  const payload = await backendRequest(`/v1/workspaces/${encodeURIComponent(workspaceId)}/invites`, {
+    method: "POST",
+    body: {
+      emails,
+      note,
+      role: "member"
+    }
+  });
+
+  return Array.isArray(payload?.invites)
+    ? payload.invites.map((invite) => `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(invite.inviteCode)}`)
+    : [];
 }
 
 function getDrawerWorkspaceId() {
@@ -6714,6 +6813,7 @@ async function syncWorkspaceSettingsToBackend(workspaceId) {
     boardType: getWorkspaceBoardType(workspace),
     accent: workspace.accent || "",
     accent2: workspace.accent2 || "",
+    sharing: workspace.sharing || { enabled: false, inviteNote: "" },
     defaultWorkspace: config.defaultWorkspace || ""
   };
 
@@ -6888,6 +6988,14 @@ function normalizeBackendWorkspaceSettings(settings) {
     }
   }
 
+  if (settings.sharing && typeof settings.sharing === "object") {
+    normalized.sharing = {
+      enabled: Boolean(settings.sharing.enabled),
+      inviteNote: String(settings.sharing.inviteNote || "").trim(),
+      members: Array.isArray(settings.sharing.members) ? settings.sharing.members : []
+    };
+  }
+
   if (settings.spotlight && typeof settings.spotlight === "object") {
     normalized.spotlight = settings.spotlight;
   }
@@ -6935,6 +7043,7 @@ function getWorkspaceBackendSnapshot(workspaceId) {
       boardType: getWorkspaceBoardType(workspace),
       accent: workspace.accent || "",
       accent2: workspace.accent2 || "",
+      sharing: workspace.sharing || { enabled: false, inviteNote: "" },
       stats: Array.isArray(workspace.stats) ? workspace.stats : [],
       schedule: Array.isArray(workspace.schedule) ? workspace.schedule : [],
       kanban: Array.isArray(workspace.kanban) ? workspace.kanban : [],
@@ -6948,9 +7057,10 @@ function getWorkspaceBackendSnapshot(workspaceId) {
     state: {
       scratchpad: localStorage.getItem(workspace.scratchpadKey) || "",
       kanban: getKanbanState(workspace),
-      schedule: getScheduleState(workspace),
-      home: getHomeState(workspace),
-      homeCalendarConnection: getHomeCalendarConnection(workspace.id),
+        schedule: getScheduleState(workspace),
+        home: getHomeState(workspace),
+        sharing: normalizeWorkspaceSharing(workspace.sharing),
+        homeCalendarConnection: getHomeCalendarConnection(workspace.id),
       homeCalendarCache: getHomeCalendarCache(workspace.id),
       hiddenCalendarEvents: getHiddenCalendarEvents(workspace.id),
       calendarTodos: getCalendarTodoState(workspace.id),
@@ -9026,7 +9136,12 @@ function handleWorkspaceSettingsSubmit(event) {
     title: workspaceSettingsTitleEl.value.trim(),
     description: workspaceSettingsDescriptionEl.value.trim(),
     accent: normalizeHexColor(workspaceSettingsAccentEl.value),
-    accent2: normalizeHexColor(workspaceSettingsAccent2El.value)
+    accent2: normalizeHexColor(workspaceSettingsAccent2El.value),
+    sharing: {
+      enabled: Boolean(workspaceSettingsSharedEl?.checked),
+      members: normalizeWorkspaceMemberList(workspaceSettingsMembersEl?.value || ""),
+      inviteNote: String(workspaceSettingsShareNoteEl?.value || "").trim()
+    }
   };
 
   if (!patch.label || !patch.title || !patch.description) {
@@ -9043,6 +9158,21 @@ function handleWorkspaceSettingsSubmit(event) {
     console.warn("Unable to sync workspace settings to backend.", error);
     updateBackendSyncStatus("Saved locally. Backend sync needs attention.");
   });
+  const inviteEmails = workspaceSettingsSharedEl?.checked
+    ? normalizeWorkspaceMemberList(workspaceSettingsMembersEl?.value || "")
+    : [];
+  if (inviteEmails.length) {
+    createWorkspaceInviteLinks(workspaceId, inviteEmails, String(workspaceSettingsShareNoteEl?.value || "").trim())
+      .then((links) => {
+        if (workspaceSettingsInviteLinksEl) {
+          workspaceSettingsInviteLinksEl.value = links.join("\n");
+        }
+      })
+      .catch((error) => {
+        console.warn("Unable to create workspace invite links.", error);
+      });
+  }
+  closeDrawer();
 }
 
 async function handleWorkspaceCreateSubmit(event) {
@@ -9081,6 +9211,11 @@ async function handleWorkspaceCreateSubmit(event) {
   const accent = normalizeHexColor(workspaceCreateAccentEl?.value || currentWorkspace.accent || defaultConfig.workspaces[0].accent);
   const accent2 = normalizeHexColor(workspaceCreateAccent2El?.value || currentWorkspace.accent2 || defaultConfig.workspaces[0].accent2);
   const workspace = getWorkspaceTemplate(workspaceId, label, title, description, accent, accent2, boardType);
+  workspace.sharing = {
+    enabled: Boolean(workspaceCreateSharedEl?.checked),
+    members: normalizeWorkspaceMemberList(workspaceCreateMembersEl?.value || ""),
+    inviteNote: ""
+  };
   setWorkspaceOverride(workspaceId, workspace);
 
   const visibility = getWorkspaceCreateWidgetVisibility();
@@ -9109,6 +9244,20 @@ async function handleWorkspaceCreateSubmit(event) {
   syncWorkspaceStateToBackend(workspaceId).catch((error) => {
     console.warn("Unable to sync new workspace state to backend.", error);
   });
+  if (workspace.sharing?.enabled) {
+    const inviteEmails = normalizeWorkspaceMemberList(workspace.sharing?.members || []);
+    if (inviteEmails.length) {
+      createWorkspaceInviteLinks(workspaceId, inviteEmails, String(workspace.sharing?.inviteNote || "").trim())
+        .then((links) => {
+          if (workspaceSettingsInviteLinksEl) {
+            workspaceSettingsInviteLinksEl.value = links.join("\n");
+          }
+        })
+        .catch((error) => {
+          console.warn("Unable to create invites for new workspace.", error);
+        });
+    }
+  }
 }
 
 async function handleWorkspaceDeleteClick() {
@@ -9282,6 +9431,33 @@ function normalizeHexColor(value) {
   return fallback;
 }
 
+function normalizeWorkspaceSharing(sharing) {
+  const source = sharing && typeof sharing === "object" ? sharing : {};
+  return {
+    enabled: Boolean(source.enabled),
+    members: normalizeWorkspaceMemberList(source.members),
+    inviteNote: String(source.inviteNote || "").trim()
+  };
+}
+
+function normalizeWorkspaceMemberList(members) {
+  const list = Array.isArray(members)
+    ? members
+    : String(members || "")
+        .split(/[\n,]/)
+        .map((item) => item.trim());
+
+  return [...new Set(
+    list
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item))
+  )];
+}
+
+function serializeWorkspaceMemberList(members) {
+  return normalizeWorkspaceMemberList(members).join("\n");
+}
+
 function exportBackup() {
   const snapshot = {
     version: 1,
@@ -9301,6 +9477,7 @@ function exportBackup() {
         kanban: getKanbanState(workspace),
         schedule: getScheduleState(workspace),
         home: getHomeState(workspace),
+        sharing: normalizeWorkspaceSharing(workspace.sharing),
         homeCalendarConnection: getHomeCalendarConnection(workspace.id),
         homeCalendarCache: getHomeCalendarCache(workspace.id),
         hiddenCalendarEvents: getHiddenCalendarEvents(workspace.id),
@@ -9415,6 +9592,18 @@ function applyStateBackup(state) {
 
         if (workspaceState.home && typeof workspaceState.home === "object") {
           saveHomeState(workspaceState.id, normalizeHomeState(workspaceState.home, workspace));
+        }
+
+        if (workspaceState.sharing && typeof workspaceState.sharing === "object") {
+          setWorkspaceOverride(workspaceState.id, {
+            sharing: normalizeWorkspaceSharing(workspaceState.sharing)
+          });
+        }
+
+        if (workspaceState.sharing && typeof workspaceState.sharing === "object") {
+          setWorkspaceOverride(workspaceState.id, {
+            sharing: normalizeWorkspaceSharing(workspaceState.sharing)
+          });
         }
 
         if (workspaceState.homeCalendarConnection && typeof workspaceState.homeCalendarConnection === "object") {
@@ -9906,6 +10095,7 @@ function normalizeWorkspace(workspace) {
     boardType: getWorkspaceBoardType(workspace),
     accent: normalizeHexColor(workspace.accent || defaultConfig.workspaces[0].accent),
     accent2: normalizeHexColor(workspace.accent2 || defaultConfig.workspaces[0].accent2),
+    sharing: normalizeWorkspaceSharing(workspace.sharing),
     stats: Array.isArray(workspace.stats) ? workspace.stats : [],
     schedule: Array.isArray(workspace.schedule) ? workspace.schedule : [],
     kanban: normalizedKanban,

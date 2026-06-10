@@ -517,6 +517,19 @@ h1 {
     color 180ms ease;
 }
 
+.workspace-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 18%, rgba(255, 255, 255, 0.08));
+  color: var(--text);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .workspace-tab:hover {
   transform: translateY(-1px);
   border-color: var(--border-strong);
@@ -2465,6 +2478,10 @@ body.capture-follow-side-right .widget-panel[data-widget-id="capture"].is-follow
   gap: 14px;
 }
 
+.drawer-section-header--tight {
+  margin-top: 6px;
+}
+
 .drawer-header {
   margin-bottom: 18px;
 }
@@ -2506,6 +2523,14 @@ body.capture-follow-side-right .widget-panel[data-widget-id="capture"].is-follow
   display: flex !important;
   align-items: center;
   gap: 10px;
+}
+
+.drawer-checkbox--stacked {
+  align-items: flex-start;
+}
+
+.drawer-checkbox--stacked input {
+  margin-top: 2px;
 }
 
 .drawer-checkbox input {

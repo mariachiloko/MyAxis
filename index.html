@@ -199,6 +199,29 @@
             Accent 2
             <input id="workspace-settings-accent2" type="color" />
           </label>
+          <div class="drawer-section-header drawer-section-header--tight">
+            <h4>Workspace sharing</h4>
+            <span class="panel-hint">Ready for shared workspaces later</span>
+          </div>
+          <label class="drawer-checkbox drawer-checkbox--stacked">
+            <input id="workspace-settings-shared" type="checkbox" />
+            <span>Allow this workspace to be shared</span>
+          </label>
+          <label>
+            Invite emails
+            <textarea id="workspace-settings-members" rows="3" placeholder="brother@example.com&#10;bandmate@example.com"></textarea>
+          </label>
+          <label>
+            Invite note
+            <textarea id="workspace-settings-share-note" rows="2" placeholder="Optional note for future invites."></textarea>
+          </label>
+          <div class="drawer-actions">
+            <button class="button" id="workspace-settings-create-invites" type="button">Create invite links</button>
+          </div>
+          <label>
+            Invite links
+            <textarea id="workspace-settings-invite-links" rows="3" readonly placeholder="Generated invite links will appear here."></textarea>
+          </label>
           <div class="drawer-actions">
             <button class="button button-primary" type="submit">Save workspace</button>
             <button class="button" id="workspace-settings-reset" type="button">Reset overrides</button>
@@ -241,6 +264,18 @@
             <label>
               Accent 2
               <input id="workspace-create-accent2" type="color" />
+            </label>
+            <div class="drawer-section-header drawer-section-header--tight">
+              <h5>Sharing</h5>
+              <span class="panel-hint">Optional for later shared workspaces</span>
+            </div>
+            <label class="drawer-checkbox drawer-checkbox--stacked">
+              <input id="workspace-create-shared" type="checkbox" />
+              <span>Start this workspace as shared</span>
+            </label>
+            <label>
+              Members
+              <textarea id="workspace-create-members" rows="3" placeholder="brother@example.com&#10;bandmate@example.com"></textarea>
             </label>
             <div class="drawer-section-header">
               <h5>Start with these widgets</h5>
