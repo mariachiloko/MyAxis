@@ -458,14 +458,50 @@
 
     <section class="auth-gate hidden" id="auth-gate" aria-label="Sign in to MyAxis">
       <div class="auth-gate-card">
-        <p class="eyebrow">MyAxis cloud access</p>
-        <h2>Sign in to continue</h2>
-        <p class="lede">
-          Your saved workspaces, calendar links, and cloud-backed state load after you sign in.
-        </p>
-        <p class="panel-hint" id="auth-gate-status">Checking sign-in...</p>
-        <div class="auth-gate-actions">
-          <a class="button button-primary" id="auth-gate-login" href="#">Sign in with Cognito</a>
+        <div class="auth-gate-brand">
+          <div class="auth-gate-mark" aria-hidden="true">
+            <svg viewBox="0 0 240 240" role="img" aria-label="MyAxis logo">
+              <defs>
+                <linearGradient id="authMarkBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#24315f" />
+                  <stop offset="100%" stop-color="#5a6fd8" />
+                </linearGradient>
+                <linearGradient id="authMarkGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#7fe2a3" />
+                  <stop offset="100%" stop-color="#4dbd9d" />
+                </linearGradient>
+              </defs>
+              <path d="M63 44c0-10 8-18 18-18s18 8 18 18v96l39-39c7-7 18-7 25 0s7 18 0 25l-47 47c-7 7-17 11-28 11s-21-4-28-11L63 169c-7-7-11-17-11-28V44z" fill="url(#authMarkBlue)" opacity="0.96"></path>
+              <path d="M177 44c0-10-8-18-18-18s-18 8-18 18v96l-39-39c-7-7-18-7-25 0s-7 18 0 25l47 47c7 7 17 11 28 11s21-4 28-11l25-25c7-7 11-17 11-28V44z" fill="url(#authMarkGreen)" opacity="0.9"></path>
+              <path d="M108 112c0-13 10-23 22-23s22 10 22 23-10 23-22 23-22-10-22-23z" fill="#0e2336" opacity="0.7"></path>
+            </svg>
+          </div>
+          <div class="auth-gate-brand-copy">
+            <p class="eyebrow">MyAxis cloud access</p>
+            <h2>One app. All of life.</h2>
+            <p class="lede">
+              Your workspaces, calendar links, notes, Spotify, and cloud-backed state load after you sign in.
+            </p>
+          </div>
+        </div>
+        <div class="auth-gate-body">
+          <div class="auth-gate-panel">
+            <p class="panel-kicker">Secure workspace access</p>
+            <h3>Pick up exactly where you left off.</h3>
+            <p class="panel-copy">
+              Sign in once to restore your current workspace, saved widgets, and cloud data across devices.
+            </p>
+            <ul class="auth-gate-points" aria-label="MyAxis features">
+              <li>Saved workspaces and widget layouts</li>
+              <li>Calendar and Spotify connection per workspace</li>
+              <li>Cloud-backed notes, tasks, and capture history</li>
+            </ul>
+          </div>
+          <div class="auth-gate-cta">
+            <p class="panel-hint" id="auth-gate-status">Checking sign-in...</p>
+            <a class="button button-primary auth-gate-login" id="auth-gate-login" href="#">Sign in with Cognito</a>
+            <p class="auth-gate-note">Use your own account. Nothing here changes until you sign in.</p>
+          </div>
         </div>
       </div>
     </section>
