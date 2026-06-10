@@ -2811,6 +2811,7 @@ function renderCapture(workspace) {
   wireCaptureCalculator(workspace.id);
   wireCaptureBoard(workspace.id, boardState);
   applyCaptureFollowLayout(workspace.id);
+  scrollCaptureAssistantTranscriptToBottom();
 }
 
 function getCaptureModeStorageKey(workspaceId) {
@@ -2939,6 +2940,17 @@ function renderCaptureAssistantTranscript(messages) {
       `;
     })
     .join("");
+}
+
+function scrollCaptureAssistantTranscriptToBottom() {
+  const transcript = document.getElementById("capture-assistant-transcript");
+  if (!transcript) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    transcript.scrollTop = transcript.scrollHeight;
+  });
 }
 
 function formatAssistantTimestamp(value) {

@@ -2094,18 +2094,19 @@ button {
 
 .capture-assistant-transcript {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   max-height: 360px;
   overflow: auto;
   padding-right: 4px;
+  scroll-behavior: smooth;
 }
 
 .capture-assistant-empty,
 .capture-assistant-message {
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 16px;
   background: linear-gradient(180deg, var(--surface-soft), color-mix(in oklab, var(--surface-soft) 70%, var(--surface)));
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
 
 .capture-assistant-empty strong,
@@ -2124,7 +2125,7 @@ button {
 
 .capture-assistant-message {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .capture-assistant-message--assistant {
@@ -2149,6 +2150,7 @@ button {
   color: var(--text);
   line-height: 1.5;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .capture-assistant-composer {
