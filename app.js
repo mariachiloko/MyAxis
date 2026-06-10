@@ -123,6 +123,7 @@ const appState = {
   spotifyPlaybackQueueSeedTrackUri: "",
   spotifyAutoAdvanceLock: false,
   spotifyPlaylistAdvanceTimer: null,
+  spotifyPlaybackMonitorTimer: null,
   spotifyExpectedTrackEndAt: 0,
   calendarView: getStoredCalendarView(),
   calendarAnchor: getStoredCalendarAnchor(),
@@ -4196,6 +4197,7 @@ function updateSpotifyPlayerState(patch = {}) {
 
 function disconnectSpotifyPlayer(workspaceId) {
   clearSpotifyPlaylistAdvanceTimer();
+  clearSpotifyPlaybackMonitorTimer();
   if (appState.spotifyPlayer && appState.spotifyPlayerWorkspaceId === workspaceId) {
     try {
       appState.spotifyPlayer.disconnect();
@@ -4224,8 +4226,16 @@ function clearSpotifyPlaylistAdvanceTimer() {
   }
 }
 
+function clearSpotifyPlaybackMonitorTimer() {
+  if (appState.spotifyPlaybackMonitorTimer) {
+    window.clearTimeout(appState.spotifyPlaybackMonitorTimer);
+    appState.spotifyPlaybackMonitorTimer = null;
+  }
+}
+
 function clearSpotifyPlaylistViewState() {
   clearSpotifyPlaylistAdvanceTimer();
+  clearSpotifyPlaybackMonitorTimer();
 }
 
 async function queueSpotifyRecommendations(workspaceId, seedTrackUri) {
@@ -4408,6 +4418,7 @@ function scheduleSpotifyPlaybackAdvance(workspaceId) {
   const state = appState.spotifyPlayerState;
   if (!state || !state.track?.uri) {
     clearSpotifyPlaylistAdvanceTimer();
+    clearSpotifyPlaybackMonitorTimer();
     appState.spotifyExpectedTrackEndAt = 0;
     return;
   }
@@ -4417,44 +4428,59 @@ function scheduleSpotifyPlaybackAdvance(workspaceId) {
     return;
   }
 
-  const isNearEnd = remaining <= 2000;
-  if (state.paused) {
-    const expectedEndReached = Boolean(appState.spotifyExpectedTrackEndAt && Date.now() >= appState.spotifyExpectedTrackEndAt - 1500);
+  if (state.paused && remaining > 2000 && !appState.spotifyExpectedTrackEndAt) {
     clearSpotifyPlaylistAdvanceTimer();
-    if ((!isNearEnd && !expectedEndReached) || appState.spotifyAutoAdvanceLock) {
-      appState.spotifyExpectedTrackEndAt = 0;
-      return;
-    }
-
-    appState.spotifyAutoAdvanceLock = true;
-    appState.spotifyPlaylistAdvanceTimer = window.setTimeout(() => {
-      advanceSpotifyPlaybackQueue(workspaceId, 1)
-        .catch((error) => {
-          console.warn("Unable to auto-advance Spotify playback.", error);
-        })
-        .finally(() => {
-          appState.spotifyAutoAdvanceLock = false;
-        });
-    }, 250);
-    return;
-  }
-
-  if (remaining <= 0) {
+    clearSpotifyPlaybackMonitorTimer();
     return;
   }
 
   clearSpotifyPlaylistAdvanceTimer();
   appState.spotifyExpectedTrackEndAt = Date.now() + remaining;
-  const delay = Math.max(250, remaining + 120);
+  clearSpotifyPlaybackMonitorTimer();
+  const delay = Math.max(1000, Math.min(5000, remaining + 120));
   appState.spotifyPlaylistAdvanceTimer = window.setTimeout(() => {
-    appState.spotifyAutoAdvanceLock = true;
-    advanceSpotifyPlaybackQueue(workspaceId, 1)
-      .catch((error) => {
+    appState.spotifyPlaylistAdvanceTimer = null;
+    if (appState.spotifyAutoAdvanceLock) {
+      scheduleSpotifyPlaybackAdvance(workspaceId);
+      return;
+    }
+
+    const maybeAdvance = async () => {
+      const player = appState.spotifyPlayer;
+      if (!player || appState.spotifyPlayerWorkspaceId !== workspaceId) {
+        return;
+      }
+
+      const currentState = await player.getCurrentState().catch(() => null);
+      setSpotifyPlayerState(currentState);
+      const liveState = appState.spotifyPlayerState;
+      const liveTrackUri = String(liveState?.track?.uri || "").trim();
+      if (!liveTrackUri) {
+        appState.spotifyExpectedTrackEndAt = 0;
+        return;
+      }
+
+      const liveRemaining = Math.max(0, Number(liveState.duration || 0) - Number(liveState.position || 0));
+      const expectedEndReached = Boolean(appState.spotifyExpectedTrackEndAt && Date.now() >= appState.spotifyExpectedTrackEndAt - 1200);
+      const shouldAdvance = liveRemaining <= 2000 || expectedEndReached;
+      if (!shouldAdvance) {
+        scheduleSpotifyPlaybackAdvance(workspaceId);
+        return;
+      }
+
+      appState.spotifyAutoAdvanceLock = true;
+      try {
+        await advanceSpotifyPlaybackQueue(workspaceId, 1);
+      } catch (error) {
         console.warn("Unable to auto-advance Spotify playback.", error);
-      })
-      .finally(() => {
+      } finally {
         appState.spotifyAutoAdvanceLock = false;
-      });
+      }
+    };
+
+    maybeAdvance().catch((error) => {
+      console.warn("Unable to auto-advance Spotify playback.", error);
+    });
   }, delay);
 }
 
