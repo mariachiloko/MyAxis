@@ -102,9 +102,9 @@ body {
 body.auth-gated {
   overflow: hidden;
   background:
-    radial-gradient(circle at 20% 20%, rgba(125, 211, 252, 0.16), transparent 28%),
-    radial-gradient(circle at 80% 30%, rgba(94, 234, 212, 0.12), transparent 26%),
-    linear-gradient(180deg, #eef3f8 0%, #dfe7ee 100%);
+    radial-gradient(circle at 20% 20%, rgba(125, 211, 252, 0.08), transparent 28%),
+    radial-gradient(circle at 80% 30%, rgba(94, 234, 212, 0.06), transparent 26%),
+    linear-gradient(180deg, #0c1120 0%, #111a2f 100%);
 }
 
 body.auth-gated .shell {
@@ -119,141 +119,73 @@ body.auth-gated .shell {
 }
 
 .auth-gate-card {
-  width: min(980px, 100%);
-  padding: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 34px;
+  width: min(740px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 30px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.94)),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(243, 246, 249, 0.9));
+    linear-gradient(180deg, rgba(10, 16, 30, 0.92), rgba(15, 22, 38, 0.96));
   box-shadow:
-    0 40px 90px rgba(15, 23, 42, 0.12),
-    0 10px 26px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(18px);
+    0 40px 90px rgba(0, 0, 0, 0.42),
+    0 10px 26px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(16px);
 }
 
-.auth-gate-brand {
+.auth-gate-hero {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 28px;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 22px;
   align-items: center;
-  padding: 18px 18px 28px;
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at top left, rgba(53, 97, 177, 0.11), transparent 36%),
-    radial-gradient(circle at top right, rgba(74, 189, 157, 0.12), transparent 30%);
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-.auth-gate-mark {
-  width: min(240px, 34vw);
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  filter: drop-shadow(0 20px 30px rgba(15, 23, 42, 0.16));
-}
-
-.auth-gate-mark svg {
+.auth-gate-logo {
+  display: block;
   width: 100%;
-  height: 100%;
+  max-width: 240px;
+  height: auto;
+  border-radius: 20px;
+  box-shadow: none;
 }
 
 .auth-gate-brand-copy {
   min-width: 0;
 }
 
+.auth-gate-brand-copy .eyebrow {
+  color: color-mix(in oklab, var(--muted) 70%, #c7d2fe);
+}
+
 .auth-gate-card h2 {
   margin-top: 10px;
-  font-size: clamp(2.2rem, 4vw, 4rem);
+  font-size: clamp(2rem, 3vw, 3.25rem);
   line-height: 0.98;
   letter-spacing: -0.05em;
+  color: var(--text);
 }
 
 .auth-gate-card .lede {
-  max-width: 58ch;
-  color: color-mix(in oklab, var(--text) 82%, var(--muted));
-  font-size: 1.05rem;
-}
-
-.auth-gate-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr);
-  gap: 18px;
-  padding-top: 6px;
-}
-
-.auth-gate-panel,
-.auth-gate-cta {
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
-}
-
-.auth-gate-panel {
-  padding: 22px 22px 20px;
-}
-
-.panel-kicker {
-  margin: 0 0 10px;
-  color: color-mix(in oklab, var(--accent) 36%, #111827);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.auth-gate-panel h3 {
-  margin: 0 0 10px;
-  font-size: clamp(1.35rem, 2.2vw, 1.95rem);
-  line-height: 1.08;
-}
-
-.panel-copy {
-  margin: 0;
-  color: color-mix(in oklab, var(--text) 78%, var(--muted));
-}
-
-.auth-gate-points {
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 10px;
-}
-
-.auth-gate-points li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: color-mix(in oklab, var(--text) 82%, var(--muted));
-}
-
-.auth-gate-points li::before {
-  content: "";
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 0 0 4px rgba(125, 211, 252, 0.12);
+  max-width: 42ch;
+  color: color-mix(in oklab, var(--text) 80%, var(--muted));
+  font-size: 1rem;
 }
 
 .auth-gate-cta {
   display: grid;
-  align-content: center;
   gap: 14px;
-  padding: 22px;
+  padding-top: 22px;
 }
 
 .auth-gate-login {
-  width: 100%;
+  width: fit-content;
   justify-content: center;
   padding: 15px 18px;
   border-radius: 18px;
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.01em;
-  box-shadow: 0 16px 28px rgba(59, 130, 246, 0.16);
+  box-shadow: 0 16px 28px rgba(59, 130, 246, 0.24);
 }
 
 .auth-gate-note {
@@ -263,25 +195,23 @@ body.auth-gated .shell {
   line-height: 1.45;
 }
 
-.auth-gate-actions {
-  margin-top: 24px;
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 @media (max-width: 900px) {
   .auth-gate-card {
-    padding: 18px;
+    padding: 22px;
   }
 
-  .auth-gate-brand,
-  .auth-gate-body {
+  .auth-gate-hero {
     grid-template-columns: 1fr;
+    justify-items: start;
+    text-align: left;
   }
 
-  .auth-gate-mark {
-    width: min(220px, 52vw);
+  .auth-gate-logo {
+    width: min(240px, 72vw);
+  }
+
+  .auth-gate-login {
+    width: 100%;
   }
 }
 
@@ -353,10 +283,19 @@ body.auth-gated .shell {
 
 .hero {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+}
+
+.hero-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 620px;
+  min-width: 0;
 }
 
 .eyebrow,
@@ -384,8 +323,8 @@ h1 {
 
 .lede,
 .panel-description {
-  margin-top: 12px;
-  max-width: 62ch;
+  margin-top: 6px;
+  max-width: 54ch;
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.55;
@@ -396,7 +335,17 @@ h1 {
   flex-wrap: wrap;
   justify-content: end;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: clamp(24px, 4vw, 72px);
+  max-width: min(820px, 52vw);
+}
+
+.hero-menu-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .pill {
@@ -2692,6 +2641,20 @@ body.capture-follow-side-right .widget-panel[data-widget-id="capture"].is-follow
 
   .weather-meta {
     justify-content: start;
+  }
+
+  .hero {
+    align-items: start;
+  }
+
+  .hero-meta {
+    margin-left: 0;
+    margin-right: 0;
+    max-width: 100%;
+  }
+
+  .hero-brand {
+    max-width: 100%;
   }
 }
 

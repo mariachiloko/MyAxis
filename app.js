@@ -1408,6 +1408,458 @@ function generateLocalAssistantReply(workspace, prompt) {
   return `${summary.dayLabel}. ${nextAction} I can also summarize tasks, schedule, study prompts, or work stories if you want.`;
 }
 
+function stripAssistantPrefix(input, prefixes) {
+  const raw = String(input || "").trim();
+  const lower = raw.toLowerCase();
+  const orderedPrefixes = [...prefixes].sort((left, right) => right.length - left.length);
+  for (const prefix of orderedPrefixes) {
+    if (lower.startsWith(prefix)) {
+      return raw.slice(prefix.length).trim().replace(/^[\s:,-]+/, "");
+    }
+  }
+  return "";
+}
+
+function parseAssistantTimeValue(input) {
+  const match = String(input || "").match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (!match) {
+    return "";
+  }
+
+  let hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2] || "0", 10);
+  const period = String(match[3] || "").toLowerCase();
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return "";
+  }
+
+  hours = hours % 12;
+  if (period === "pm") {
+    hours += 12;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(Math.min(59, Math.max(0, minutes))).padStart(2, "0")}`;
+}
+
+function parseAssistantDayLabel(input) {
+  const lowered = String(input || "").toLowerCase();
+  const today = getSelectedAgendaDate();
+  const dayMap = [
+    { pattern: /\bmonday\b|\bmon\b/i, value: "Mon" },
+    { pattern: /\btuesday\b|\btue\b/i, value: "Tue" },
+    { pattern: /\bwednesday\b|\bwed\b/i, value: "Wed" },
+    { pattern: /\bthursday\b|\bthu\b|\bthur\b|\bthurs\b/i, value: "Thu" },
+    { pattern: /\bfriday\b|\bfri\b/i, value: "Fri" },
+    { pattern: /\bsaturday\b|\bsat\b/i, value: "Sat" },
+    { pattern: /\bsunday\b|\bsun\b/i, value: "Sun" }
+  ];
+
+  if (/\btomorrow\b/i.test(lowered)) {
+    return getDayLabel(addDays(today, 1));
+  }
+
+  if (/\btoday\b/i.test(lowered)) {
+    return getDayLabel(today);
+  }
+
+  for (const item of dayMap) {
+    if (item.pattern.test(lowered)) {
+      return item.value;
+    }
+  }
+
+  return getDayLabel(today);
+}
+
+function cleanupAssistantTitle(input) {
+  return String(input || "")
+    .replace(/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|thur|thurs|fri|sat|sun)\b/gi, " ")
+    .replace(/\b(at|on|for|to|the|a|an|in|this|next)\b/gi, " ")
+    .replace(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi, " ")
+    .replace(/[:|/\\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitAssistantCardPrompt(input) {
+  const text = String(input || "").trim();
+  const separators = [" -> ", " => ", " / ", " | ", " - ", " — ", " – ", "\n"];
+  for (const separator of separators) {
+    if (text.includes(separator)) {
+      const parts = text.split(separator).map((part) => part.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        return {
+          question: parts[0],
+          answer: parts.slice(1).join(" ").trim()
+        };
+      }
+    }
+  }
+
+  return {
+    question: text,
+    answer: ""
+  };
+}
+
+function extractRecipeTopic(input) {
+  const text = String(input || "");
+  const patterns = [
+    /\brecipe for\s+([^.,;\n]+)/i,
+    /\brecipe to make\s+([^.,;\n]+)/i,
+    /\bmake me a recipe for\s+([^.,;\n]+)/i,
+    /\bfor\s+([^.,;\n]+)\s+and add/i
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+  return "";
+}
+
+function extractListItemsFromText(input) {
+  const lines = String(input || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const items = [];
+  for (const line of lines) {
+    const cleaned = line
+      .replace(/^[*-]\s+/, "")
+      .replace(/^\d+[.)]\s+/, "")
+      .trim();
+    if (cleaned) {
+      items.push(cleaned);
+    }
+  }
+  return items;
+}
+
+function extractFirstJsonObjectText(input) {
+  const text = String(input || "");
+  const start = text.indexOf("{");
+  if (start < 0) {
+    return "";
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, index + 1);
+      }
+    }
+  }
+
+  return "";
+}
+
+function parseAssistantJsonObject(input) {
+  const block = extractFirstJsonObjectText(input);
+  if (!block) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(block);
+  } catch (error) {
+    return null;
+  }
+}
+
+function filterAssistantIngredientCandidates(items) {
+  return [...new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => String(item || "").trim())
+      .filter((item) => item.length > 0)
+      .filter((item) => item.length <= 42)
+      .filter((item) => !/[{}[\]"]/g.test(item))
+      .filter((item) => !/[.!?]{1,}/.test(item))
+      .filter((item) => !/^(sure|here|recipe|ingredients?|json|add(ed)?|list|answer|assistant)\b/i.test(item))
+  )];
+}
+
+async function buildRecipeGroceryItems(workspace, prompt) {
+  const recipeTopic = extractRecipeTopic(prompt) || "recipe ingredients";
+  const plannerPrompt = [
+    "Extract grocery ingredients from this request.",
+    "Return JSON only with this shape:",
+    '{"recipeTitle":"string","ingredients":["item 1","item 2"]}',
+    "Keep ingredients short and practical.",
+    `Request: ${String(prompt || "").trim()}`
+  ].join("\n");
+
+  const aiText = await resolveAIText({
+    mode: "assistant",
+    workspace,
+    prompt: plannerPrompt,
+    messages: [{ role: "user", content: plannerPrompt }],
+    allowLocalFallback: true
+  });
+
+  const parsed = parseAssistantJsonObject(aiText);
+
+  const ingredients = Array.isArray(parsed?.ingredients) && parsed.ingredients.length
+    ? parsed.ingredients.map((item) => String(item || "").trim()).filter(Boolean)
+    : filterAssistantIngredientCandidates(extractListItemsFromText(aiText));
+
+  const uniqueIngredients = [...new Set(ingredients)].slice(0, 10);
+  if (!uniqueIngredients.length) {
+    return {
+      title: recipeTopic,
+      ingredients: []
+    };
+  }
+
+  return {
+    title: String(parsed?.recipeTitle || recipeTopic || "recipe").trim(),
+    ingredients: uniqueIngredients
+  };
+}
+
+function resolveAssistantActionTargetWorkspaceId(currentWorkspaceId, actionType) {
+  if (actionType === "story") {
+    return "work";
+  }
+
+  if (actionType === "study-card") {
+    return "study";
+  }
+
+  if (actionType === "grocery") {
+    return "home";
+  }
+
+  return currentWorkspaceId;
+}
+
+function createAssistantTask(workspaceId, title, detail = "") {
+  const workspace = getWorkspace(workspaceId);
+  const state = getKanbanState(workspace);
+  const columnId = state.columns.todo ? "todo" : Object.keys(state.columns)[0] || "";
+  if (!columnId) {
+    return false;
+  }
+
+  const nextCard = {
+    id: createStableId("task", title),
+    title: String(title || "").trim(),
+    detail: String(detail || "").trim(),
+    tag: "Task",
+    subtasks: []
+  };
+
+  state.columns[columnId] = [...(state.columns[columnId] || []), nextCard];
+  saveKanbanState(workspaceId, state);
+  return true;
+}
+
+function createAssistantCalendarEvent(workspaceId, eventPayload) {
+  const workspace = getWorkspace(workspaceId);
+  const events = Array.isArray(workspace.calendar) ? [...workspace.calendar] : [];
+  events.push({
+    day: eventPayload.day || getDayLabel(getSelectedAgendaDate()),
+    time: eventPayload.time || "",
+    title: String(eventPayload.title || "").trim(),
+    detail: String(eventPayload.detail || "").trim(),
+    type: "calendar"
+  });
+  setWorkspaceOverride(workspaceId, { calendar: events });
+  return true;
+}
+
+function createAssistantHomeItem(workspaceId, listName, title) {
+  const workspace = getWorkspace(workspaceId);
+  const state = getHomeState(workspace);
+  const nextItem = {
+    id: createStableId("home", title),
+    title: String(title || "").trim(),
+    done: false
+  };
+  state[listName] = [...(state[listName] || []), nextItem];
+  saveHomeState(workspaceId, state);
+  return true;
+}
+
+function createAssistantFlashcard(workspaceId, payload) {
+  const workspace = getWorkspace(workspaceId);
+  const cards = [...getFlashcardsState(workspace)];
+  cards.unshift({
+    id: createStableId(payload.category === "story" ? "story" : "flashcard", payload.question || "card"),
+    question: String(payload.question || "").trim(),
+    answer: String(payload.answer || "").trim(),
+    category: payload.category === "story" ? "story" : "study"
+  });
+  saveFlashcardsState(workspaceId, cards);
+  return true;
+}
+
+async function handleAssistantWorkspaceAction(workspaceId, prompt) {
+  const input = String(prompt || "").trim();
+  const lowered = input.toLowerCase();
+
+  if (/\b(recipe|ingredients)\b/i.test(input) && /\b(grocery|shopping list|add ingredients|ingredient(s)?\s+to\s+my\s+grocery)\b/i.test(input)) {
+    const targetWorkspaceId = resolveAssistantActionTargetWorkspaceId(workspaceId, "grocery");
+    const targetWorkspace = getWorkspace(targetWorkspaceId);
+    const recipePlan = await buildRecipeGroceryItems(targetWorkspace, input);
+    const ingredients = recipePlan.ingredients || [];
+    for (const ingredient of ingredients) {
+      createAssistantHomeItem(targetWorkspace.id, "groceries", ingredient);
+    }
+    const recipePrompt = [
+      `Write a concise recipe for ${recipePlan.title || extractRecipeTopic(input) || "this dish"}.`,
+      "Do not mention JSON, the grocery list, or internal notes.",
+      "Use short, readable steps."
+    ].join(" ");
+    const recipeReply = await resolveAIText({
+      mode: "assistant",
+      workspace: targetWorkspace,
+      prompt: recipePrompt,
+      messages: [{ role: "user", content: recipePrompt }],
+      allowLocalFallback: true
+    });
+    renderWorkspace(getWorkspace(appState.workspaceId));
+    if (!ingredients.length) {
+      return `${recipeReply}\n\nI couldn't reliably extract ingredients for the grocery list yet.`;
+    }
+    return `${recipeReply}\n\nI added ${ingredients.length} ingredients to the grocery list.`;
+  }
+
+  if (/\b(remind me|reminder|set a reminder)\b/i.test(input)) {
+    const targetWorkspaceId = resolveAssistantActionTargetWorkspaceId(workspaceId, "event");
+    const targetWorkspace = getWorkspace(targetWorkspaceId);
+    const time = parseAssistantTimeValue(input);
+    const day = parseAssistantDayLabel(input);
+    const title = cleanupAssistantTitle(
+      input
+        .replace(/\b(remind me to|remind me about|remind me|set a reminder to|set a reminder about|set a reminder)\b/gi, " ")
+        .trim()
+    ) || "Reminder";
+    createAssistantCalendarEvent(targetWorkspace.id, {
+      day,
+      time,
+      title: title.startsWith("Reminder") ? title : `Reminder: ${title}`,
+      detail: ""
+    });
+    renderWorkspace(getWorkspace(appState.workspaceId));
+    return `Added reminder “${title}”${day ? ` for ${day}` : ""}${time ? ` at ${formatDisplayTimeLabel(time)}` : ""}.`;
+  }
+
+  const storyPrefixes = ["create work story card", "add work story card", "create story card", "add story card", "new story card", "create story", "add story", "work story"];
+  const studyPrefixes = ["create study card", "add study card", "new study card", "create flashcard", "add flashcard", "new flashcard", "study card", "flashcard"];
+  const groceryPrefixes = ["add grocery item", "create grocery item", "add grocery", "create grocery", "new grocery", "add to grocery list", "add to shopping list", "grocery", "shopping list"];
+  const eventPrefixes = ["add calendar event", "create calendar event", "add event", "create event", "new event", "schedule event", "schedule"];
+  const taskPrefixes = ["add to-do", "create to-do", "new to-do", "add todo", "create todo", "new todo", "make task", "create task", "add task", "new task"];
+
+  let actionType = "";
+  let body = "";
+  if (storyPrefixes.some((prefix) => lowered.startsWith(prefix))) {
+    actionType = "story";
+    body = stripAssistantPrefix(input, storyPrefixes);
+  } else if (studyPrefixes.some((prefix) => lowered.startsWith(prefix))) {
+    actionType = "study-card";
+    body = stripAssistantPrefix(input, studyPrefixes);
+  } else if (groceryPrefixes.some((prefix) => lowered.startsWith(prefix))) {
+    actionType = "grocery";
+    body = stripAssistantPrefix(input, groceryPrefixes);
+  } else if (eventPrefixes.some((prefix) => lowered.startsWith(prefix))) {
+    actionType = "event";
+    body = stripAssistantPrefix(input, eventPrefixes);
+  } else if (taskPrefixes.some((prefix) => lowered.startsWith(prefix))) {
+    actionType = "task";
+    body = stripAssistantPrefix(input, taskPrefixes);
+  } else {
+    return null;
+  }
+
+  const targetWorkspaceId = resolveAssistantActionTargetWorkspaceId(workspaceId, actionType);
+  const targetWorkspace = getWorkspace(targetWorkspaceId);
+
+  if (actionType === "task") {
+    const titleAndDetail = body.includes(":")
+      ? body.split(":").map((part) => part.trim()).filter(Boolean)
+      : [body.trim()];
+    const title = cleanupAssistantTitle(titleAndDetail[0] || body);
+    const detail = titleAndDetail.slice(1).join(" ").trim();
+    if (!title) {
+      return "Tell me the task title and I’ll add it.";
+    }
+    createAssistantTask(targetWorkspace.id, title, detail);
+    renderWorkspace(getWorkspace(appState.workspaceId));
+    return `Added task “${title}” to ${targetWorkspace.id === "home" ? "home" : "the current workspace"}.`;
+  }
+
+  if (actionType === "event") {
+    const time = parseAssistantTimeValue(body);
+    const day = parseAssistantDayLabel(body);
+    const title = cleanupAssistantTitle(body);
+    if (!title) {
+      return "Tell me the event title and I’ll add it.";
+    }
+    createAssistantCalendarEvent(targetWorkspace.id, {
+      day,
+      time,
+      title,
+      detail: ""
+    });
+    renderWorkspace(getWorkspace(appState.workspaceId));
+    return `Added event “${title}”${day ? ` for ${day}` : ""}${time ? ` at ${formatDisplayTimeLabel(time)}` : ""}.`;
+  }
+
+  if (actionType === "grocery") {
+    const title = cleanupAssistantTitle(body);
+    if (!title) {
+      return "Tell me the grocery item and I’ll add it.";
+    }
+    createAssistantHomeItem(targetWorkspace.id, "groceries", title);
+    renderWorkspace(getWorkspace(appState.workspaceId));
+    return `Added “${title}” to the grocery list.`;
+  }
+
+  if (actionType === "story" || actionType === "study-card") {
+    const parsedCard = splitAssistantCardPrompt(body);
+    const question = cleanupAssistantTitle(parsedCard.question || body);
+    const answer = String(parsedCard.answer || "").trim() || `Assistant note: ${cleanupAssistantTitle(body) || body}`;
+    if (!question) {
+      return actionType === "story" ? "Tell me the work story title and I’ll add it." : "Tell me the study card question and I’ll add it.";
+    }
+    createAssistantFlashcard(targetWorkspace.id, {
+      question,
+      answer,
+      category: actionType === "story" ? "story" : "study"
+    });
+    renderWorkspace(getWorkspace(appState.workspaceId));
+    return actionType === "story"
+      ? `Created work story card “${question}”.`
+      : `Created study card “${question}”.`;
+  }
+
+  return null;
+}
+
 async function sendAssistantMessage(workspaceId, prompt) {
   const input = String(prompt || "").trim();
   if (!input) {
@@ -1425,21 +1877,23 @@ async function sendAssistantMessage(workspaceId, prompt) {
   renderWorkspace(getWorkspace(appState.workspaceId));
   focusCaptureAssistantInput(workspaceId);
 
-  let reply = "";
-  const backendSync = getBackendSyncConfig();
-  try {
-    reply = await resolveAIText({
-      mode: "assistant",
-      workspace,
-      prompt: input,
-      messages: [{ role: "user", content: input }],
-      allowLocalFallback: !backendSync.baseUrl
-    });
-  } catch (error) {
-    console.warn("Assistant request failed.", error);
-    reply = backendSync.baseUrl
-      ? "MyAxis AI is temporarily unavailable. Please try again in a moment."
-      : generateLocalAssistantReply(workspace, input);
+  let reply = await handleAssistantWorkspaceAction(workspaceId, input);
+  if (!reply) {
+    const backendSync = getBackendSyncConfig();
+    try {
+      reply = await resolveAIText({
+        mode: "assistant",
+        workspace,
+        prompt: input,
+        messages: [{ role: "user", content: input }],
+        allowLocalFallback: !backendSync.baseUrl
+      });
+    } catch (error) {
+      console.warn("Assistant request failed.", error);
+      reply = backendSync.baseUrl
+        ? "MyAxis AI is temporarily unavailable. Please try again in a moment."
+        : generateLocalAssistantReply(workspace, input);
+    }
   }
 
   const nextState = getStoredCaptureAssistant(workspaceId);

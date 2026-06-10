@@ -12,6 +12,7 @@ cp "${ROOT_DIR}/app.js" "${DIST_DIR}/app.js"
 cp "${ROOT_DIR}/styles.css" "${DIST_DIR}/styles.css"
 cp "${ROOT_DIR}/config.example.js" "${DIST_DIR}/config.example.js"
 cp "${ROOT_DIR}/config.schema.json" "${DIST_DIR}/config.schema.json"
+cp -R "${ROOT_DIR}/assets" "${DIST_DIR}/assets"
 
 DIST_DIR="${DIST_DIR}" python3 - <<'PY'
 import json
