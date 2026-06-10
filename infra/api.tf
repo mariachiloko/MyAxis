@@ -37,6 +37,13 @@ resource "aws_apigatewayv2_route" "health" {
   authorization_type = "NONE"
 }
 
+resource "aws_apigatewayv2_route" "preflight" {
+  api_id             = aws_apigatewayv2_api.api.id
+  route_key          = "OPTIONS /{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.api.id}"
+  authorization_type = "NONE"
+}
+
 resource "aws_apigatewayv2_route" "proxy" {
   api_id             = aws_apigatewayv2_api.api.id
   route_key          = "ANY /{proxy+}"

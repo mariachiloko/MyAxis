@@ -36,6 +36,10 @@ exports.handler = async (event) => {
     const method = event?.requestContext?.http?.method || event?.httpMethod || "GET";
     const path = normalizePath(event);
 
+    if (method === "OPTIONS") {
+      return jsonResponse(204, {});
+    }
+
     if (isHealthRoute(method, path)) {
       return jsonResponse(200, {
         ok: true,

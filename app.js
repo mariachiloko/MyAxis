@@ -1436,7 +1436,7 @@ async function sendAssistantMessage(workspaceId, prompt) {
   } catch (error) {
     console.warn("Assistant request failed.", error);
     reply = backendSync.baseUrl
-      ? "MyAxis AI is temporarily unavailable. Sign in with Cognito or try again in a moment."
+      ? "MyAxis AI is temporarily unavailable. Please try again in a moment."
       : generateLocalAssistantReply(workspace, input);
   }
 
@@ -6317,7 +6317,7 @@ async function backendRequest(path, options = {}) {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = payload?.error || `Backend request failed (${response.status})`;
+    const message = payload?.error || payload?.message || `Backend request failed (${response.status})`;
     throw new Error(message);
   }
 
