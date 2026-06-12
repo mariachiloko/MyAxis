@@ -4490,7 +4490,7 @@ function normalizeCognitoHostedUiDomain(value, region = "") {
 
 function isLocalPreviewHost() {
   const hostname = String(window.location.hostname || "").toLowerCase();
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  return window.location.protocol === "file:" || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
 function shouldShowCognitoGate() {
@@ -4502,8 +4502,7 @@ function shouldShowCognitoGate() {
     return false;
   }
 
-  const settings = getCognitoSettings();
-  return Boolean(settings.clientId && settings.hostedUiDomain && settings.userPoolId);
+  return true;
 }
 
 function showCognitoGate() {
